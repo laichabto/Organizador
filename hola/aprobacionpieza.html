@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aprobación de contenido</title>
+<meta name="theme-color" content="#f2ebdd" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #f2ebdd;
+    --panel: #faf6ee;
+    --panel-2: #ece2cd;
+    --border: #d8cbae;
+    --text: #332e26;
+    --text-dim: #83786a;
+    --accent: #6b6152;
+    --good: #5c7a5c;
+    --warn: #a3853f;
+    --critical: #a35c4f;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px; width: 100%; max-width: 420px;
+  }
+  .card h1 { font-size: 18px; margin: 0 0 4px; }
+  .card .sub { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+  a.link-btn, button.btn {
+    display: inline-block; text-decoration: none;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 16px; cursor: pointer; font-size: 14px; font-family: inherit;
+    width: 100%; text-align: center; margin-bottom: 10px;
+  }
+  button.btn.primary { background: var(--good); border-color: var(--good); color: #faf6ee; font-weight: 600; }
+  button.btn.danger { background: transparent; border-color: var(--critical); color: var(--critical); }
+  textarea {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 10px; width: 100%; font-family: inherit; font-size: 14px;
+    min-height: 90px; margin-bottom: 10px;
+  }
+  .msg { font-size: 14px; margin-top: 6px; }
+  .msg.ok { color: var(--good); font-weight: 600; }
+  .msg.error { color: var(--critical); }
+  #paso-cambios { display: none; }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <p>Cargando...</p>
+</div>
+
+<script src="config.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const proyectoId = params.get("p");
+const piezaId = params.get("z");
+
+let db, piezaRef, piezaData;
+
+async function init() {
+  const card = document.getElementById("card");
+  if (!window.FIREBASE_CONFIG || !proyectoId || !piezaId) {
+    card.innerHTML = "<h1>Link inválido</h1><p class='sub'>Falta información para mostrar este contenido.</p>";
+    return;
+  }
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  db = firebase.firestore();
+  piezaRef = db.collection("proyectosSimple").doc(proyectoId).collection("piezas").doc(piezaId);
+
+  try {
+    const snap = await piezaRef.get();
+    if (!snap.exists) {
+      card.innerHTML = "<h1>No encontrado</h1><p class='sub'>Este link ya no está disponible.</p>";
+      return;
+    }
+    piezaData = snap.data();
+    render();
+  } catch (err) {
+    card.innerHTML = "<h1>No se pudo cargar</h1><p class='sub'>" + err.message + "</p>";
+  }
+}
+
+function render() {
+  const card = document.getElementById("card");
+  const label = piezaData.tipo === "pieza" ? `Pieza ${piezaData.numero}` : `${piezaData.tipo} ${piezaData.numero}`;
+  const yaResuelto = piezaData.estadoAprobacion === "aprobado" || piezaData.estadoAprobacion === "cambios";
+
+  let estadoTexto = "";
+  if (piezaData.estadoAprobacion === "aprobado") estadoTexto = `<p class="msg ok">Ya marcaste este contenido como aprobado. ¡Gracias!</p>`;
+  if (piezaData.estadoAprobacion === "cambios") estadoTexto = `<p class="msg error">Ya solicitaste cambios en este contenido. Comentario enviado: "${escHtml(piezaData.comentarioCambios || "")}"</p>`;
+
+  card.innerHTML = `
+    <h1>${escHtml(piezaData.clienteNombre || "")}</h1>
+    <p class="sub">${escHtml(piezaData.proyectoDescripcion || "")} — ${escHtml(label)}</p>
+    ${piezaData.link ? `<a class="link-btn" href="${escAttr(piezaData.link)}" target="_blank" rel="noopener">Ver el contenido</a>` : ""}
+    ${estadoTexto}
+    <div id="acciones" ${yaResuelto ? 'style="display:none;"' : ""}>
+      <button class="btn primary" onclick="aprobar()">Aprobar</button>
+      <button class="btn danger" onclick="mostrarCambios()">Solicitar cambios</button>
+      <div id="paso-cambios">
+        <textarea id="comentario" placeholder="Contá qué cambios necesitás..."></textarea>
+        <button class="btn danger" onclick="enviarCambios()">Enviar solicitud de cambios</button>
+      </div>
+    </div>
+    <div id="resultado"></div>
+  `;
+}
+
+function mostrarCambios() {
+  document.getElementById("paso-cambios").style.display = "block";
+}
+
+async function aprobar() {
+  try {
+    await piezaRef.update({
+      estadoAprobacion: "aprobado",
+      comentarioCambios: "",
+      respondidoAt: firebase.firestore.FieldValue.serverTimestamp(),
+      vistoPorMi: false,
+    });
+    document.getElementById("resultado").innerHTML = `<p class="msg ok">¡Gracias! Quedó marcado como aprobado.</p>`;
+    document.getElementById("acciones").style.display = "none";
+  } catch (err) {
+    document.getElementById("resultado").innerHTML = `<p class="msg error">No se pudo enviar: ${err.message}</p>`;
+  }
+}
+
+async function enviarCambios() {
+  const comentario = document.getElementById("comentario").value.trim();
+  if (!comentario) { alert("Contá brevemente qué cambios necesitás."); return; }
+  try {
+    await piezaRef.update({
+      estadoAprobacion: "cambios",
+      comentarioCambios: comentario,
+      respondidoAt: firebase.firestore.FieldValue.serverTimestamp(),
+      vistoPorMi: false,
+    });
+    document.getElementById("resultado").innerHTML = `<p class="msg ok">Listo, se envió tu solicitud de cambios.</p>`;
+    document.getElementById("acciones").style.display = "none";
+  } catch (err) {
+    document.getElementById("resultado").innerHTML = `<p class="msg error">No se pudo enviar: ${err.message}</p>`;
+  }
+}
+
+function escHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+function escAttr(str) { return escHtml(str); }
+
+init();
+</script>
+</body>
+</html>

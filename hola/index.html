@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mis Clientes y Proyectos</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#f2ebdd" />
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Poppins:wght@400;600&family=Montserrat:wght@400;700&family=Dancing+Script:wght@700&family=Quicksand:wght@600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f2ebdd;
+    --panel: #faf6ee;
+    --panel-2: #ece2cd;
+    --border: #d8cbae;
+    --text: #332e26;
+    --text-dim: #83786a;
+    --accent: #6b6152;
+    --accent-2: #8a7f6c;
+    --good: #5c7a5c;
+    --warn: #a3853f;
+    --critical: #a35c4f;
+    --radius: 4px;
+    --serif: 'Playfair Display', Georgia, serif;
+    --sans: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  /* ------------------------------------------------------------
+     Marca de esquina fina: mismo lenguaje visual del presupuestador
+     (dos ticks en L, sutiles) aplicado a tarjetas, modales y paneles.
+     ------------------------------------------------------------ */
+  .frame-ticks { position: relative; }
+  .frame-ticks::before, .frame-ticks::after {
+    content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none;
+    border-color: var(--accent); opacity: 0.45;
+  }
+  .frame-ticks::before { top: 7px; left: 7px; border-top: 1px solid; border-left: 1px solid; }
+  .frame-ticks::after { bottom: 7px; right: 7px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* Filete: separador fino con un rombo, mismo motivo del presupuestador */
+  .filete { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 14px 0; }
+  .filete::before, .filete::after { content: ""; height: 1px; flex: 1; max-width: 90px; background: var(--border); }
+  .filete .diamond { width: 5px; height: 5px; background: var(--accent); transform: rotate(45deg); flex: none; }
+
+  header {
+    padding: 20px 26px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  header h1 { margin: 0 0 4px; font-family: var(--serif); font-weight: 800; font-size: 20px; letter-spacing: 0.2px; }
+  header p { margin: 0; color: var(--text-dim); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  main { max-width: 1080px; margin: 0 auto; padding: 22px; }
+
+  .module-switch { display: flex; gap: 10px; margin-bottom: 20px; }
+  .module-switch button {
+    flex: 1; padding: 13px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--panel); color: var(--text-dim); font-family: var(--sans);
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .module-switch button:hover { border-color: var(--accent-2); color: var(--text); }
+  .module-switch button.active { background: var(--text); color: var(--panel); border-color: var(--text); }
+
+  .stats { display: flex; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
+  .stat-tile {
+    flex: 1; min-width: 150px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .stat-tile .label { font-family: var(--serif); font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; }
+  .stat-tile .value { font-family: var(--serif); font-size: 27px; font-weight: 800; margin-top: 6px; color: var(--text); }
+
+  nav.tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  nav.tabs button {
+    background: transparent; border: none; color: var(--text-dim); font-family: var(--sans);
+    padding: 11px 14px; font-size: 12.5px; letter-spacing: 0.05em; text-transform: uppercase;
+    cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+  }
+  nav.tabs button:hover { color: var(--text); }
+  nav.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+  .toolbar input[type=text] { flex: 1; min-width: 160px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  thead th {
+    text-align: left; font-family: var(--serif); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700;
+    color: var(--text-dim); padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--panel-2);
+  }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13.5px; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--panel-2); }
+  .muted { color: var(--text-dim); }
+  .empty-row td { text-align: center; color: var(--text-dim); padding: 34px; font-style: italic; }
+
+  button.btn {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border); font-family: var(--sans);
+    border-radius: var(--radius); padding: 8px 15px; cursor: pointer; font-size: 12.5px;
+    letter-spacing: 0.03em; transition: border-color 0.15s, color 0.15s;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--accent); }
+  button.btn.primary { background: var(--text); border-color: var(--text); color: var(--panel); font-weight: 600; }
+  button.btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  button.btn.small { padding: 4px 11px; font-size: 11.5px; }
+  button.btn.danger { color: var(--critical); border-color: var(--critical); background: transparent; }
+  button.btn.danger:hover { background: var(--critical); color: var(--panel); }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid currentColor;
+  }
+  .badge.sin_empezar { color: var(--text-dim); }
+  .badge.grabacion { color: var(--accent-2); }
+  .badge.edicion { color: var(--accent-2); }
+  .badge.aprobacion { color: var(--warn); }
+  .badge.cambios { color: var(--critical); }
+  .badge.aprobado { color: var(--good); }
+  .badge.publicado { color: var(--good); }
+  .badge.reels { color: var(--accent-2); }
+  .badge.historias { color: var(--accent-2); }
+  .badge.videos { color: var(--accent-2); }
+  .badge.sin_enviar { color: var(--text-dim); }
+  .badge.pendiente { color: var(--warn); }
+  .badge.consulta { color: var(--text-dim); }
+  .badge.disenio { color: var(--accent-2); }
+  .badge.confeccion { color: var(--accent-2); }
+  .badge.prueba { color: var(--warn); }
+  .badge.listo { color: var(--good); }
+  .badge.entregado { color: var(--good); }
+  .badge.enviado { color: var(--warn); }
+  .badge.aprobado_pres { color: var(--good); }
+  .badge.rechazado_pres { color: var(--critical); }
+
+  .pack-card {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; flex: 1; min-width: 150px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .pack-card.selected { border-color: var(--accent); background: var(--panel-2); }
+  .pack-card h4 { margin: 0 0 4px; font-family: var(--serif); font-weight: 700; font-size: 14px; }
+  .pack-card p { margin: 0; font-size: 12px; color: var(--text-dim); }
+
+  .color-swatch-input { display: flex; align-items: center; gap: 8px; }
+  .color-swatch-input input[type=color] { width: 44px; height: 36px; padding: 2px; flex: none; cursor: pointer; }
+
+  .seguimiento-alert {
+    background: var(--panel); border: 1px solid var(--warn); color: var(--text); border-left: 3px solid var(--warn);
+    border-radius: var(--radius); padding: 11px 15px; margin-bottom: 18px; font-size: 13px;
+  }
+
+  input, select, textarea {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius); padding: 9px 11px; width: 100%; font-family: var(--sans); font-size: 14px;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 5px; }
+  .field { margin-bottom: 13px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(51,46,38,0.55);
+    display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
+  }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 26px; width: 100%; max-width: 460px; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(51,46,38,0.18);
+  }
+  .modal h2 { margin-top: 0; font-family: var(--serif); font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
+  .modal.wide { max-width: 720px; }
+  .row-end { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  footer { text-align: center; color: var(--text-dim); font-size: 11px; letter-spacing: 0.05em; padding: 26px; }
+
+  .login-screen {
+    display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px;
+  }
+  .login-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 34px; width: 100%; max-width: 360px;
+    box-shadow: 0 25px 60px rgba(51,46,38,0.14);
+  }
+  .login-box h1 { font-family: var(--serif); font-weight: 800; font-size: 21px; margin-bottom: 8px; }
+  .login-box p { color: var(--text-dim); font-size: 13px; margin-top: 0; }
+  .msg { font-size: 13px; margin-top: 10px; }
+  .msg.ok { color: var(--good); }
+  .msg.error { color: var(--critical); }
+</style>
+</head>
+<body>
+
+<div id="login-screen" class="login-screen" style="display:none;">
+  <div class="login-box frame-ticks">
+    <h1>Mis Clientes y Proyectos</h1>
+    <p>Ingrese su email para recibir un link de acceso (sin contraseña). La primera vez que entra en cada aparato hace falta este paso; después queda guardado.</p>
+    <div class="field"><input id="login-email" type="email" placeholder="su-email@ejemplo.com" /></div>
+    <button class="btn primary" id="login-btn" style="width:100%">Enviar link de acceso</button>
+    <div id="login-msg" class="msg"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div>
+      <h1>Mis Clientes y Proyectos</h1>
+      <p>Se sincroniza automáticamente entre todos sus aparatos.</p>
+    </div>
+    <div>
+      <span class="muted" id="user-email" style="font-size:12px;"></span>
+      <button class="btn small" id="logout-btn" style="margin-left:8px;">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="module-switch">
+      <button data-modulo="contenido" class="active" onclick="setModulo('contenido')">Contenido</button>
+      <button data-modulo="design" onclick="setModulo('design')">Laila Design</button>
+    </div>
+
+    <div id="modulo-contenido">
+      <div class="stats" id="stats"></div>
+      <div id="seguimientos-alert-contenido"></div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px;">
+        <button class="btn small" onclick="openBrandConfigModal('contenido')">Datos de marca</button>
+        <button class="btn primary small" onclick="openPresupuestadorModal('contenido')">+ Nuevo presupuesto</button>
+      </div>
+
+      <nav class="tabs">
+        <button data-tab="clientes" class="active">Clientes</button>
+        <button data-tab="proyectos">Proyectos</button>
+        <button data-tab="packs">Packs</button>
+        <button data-tab="presupuestos">Presupuestos</button>
+      </nav>
+
+      <section id="tab-clientes"></section>
+      <section id="tab-proyectos" style="display:none;"></section>
+      <section id="tab-packs" style="display:none;"></section>
+      <section id="tab-presupuestos" style="display:none;"></section>
+    </div>
+
+    <div id="modulo-design" style="display:none;">
+      <div class="stats" id="stats-design"></div>
+      <div id="seguimientos-alert-design"></div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px;">
+        <button class="btn small" onclick="openBrandConfigModal('design')">Datos de marca</button>
+        <button class="btn small" onclick="irAPortfolioDesign()">Ver portfolio →</button>
+        <button class="btn primary small" onclick="openPresupuestadorModal('design')">+ Nuevo presupuesto</button>
+      </div>
+
+      <nav class="tabs">
+        <button data-tab-design="clientesDesign" class="active">Clientes</button>
+        <button data-tab-design="proyectosDesign">Proyectos</button>
+        <button data-tab-design="portfolioDesign">Portfolio</button>
+        <button data-tab-design="presupuestosDesign">Presupuestos</button>
+      </nav>
+
+      <section id="tab-clientesDesign"></section>
+      <section id="tab-proyectosDesign" style="display:none;"></section>
+      <section id="tab-portfolioDesign" style="display:none;"></section>
+      <section id="tab-presupuestosDesign" style="display:none;"></section>
+    </div>
+  </main>
+
+  <footer>
+    <button class="btn small" onclick="exportData()">Exportar copia (.json)</button>
+  </footer>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="config.js"></script>
+<script>
+const ESTADOS = {
+  sin_empezar: "Sin empezar",
+  grabacion: "En grabación",
+  edicion: "En edición",
+  aprobacion: "Enviado a aprobación",
+  cambios: "Cambios pedidos",
+  aprobado: "Aprobado",
+  publicado: "Publicado",
+};
+
+let auth, db;
+let state = {
+  clientes: [], proyectos: [], packs: [], piezas: [],
+  clientesDesign: [], proyectosDesign: [], portfolios: [],
+  brandConfig: { contenido: null, design: null },
+  presupuestosGenerados: [],
+  paletas: [],
+};
+let activeTab = "clientes";
+let activeTabDesign = "clientesDesign";
+let moduloActivo = "contenido";
+let user = null;
+let piezasUnsub = null;
+
+const ESTADOS_DESIGN = {
+  consulta: "Consulta",
+  disenio: "En diseño",
+  confeccion: "En confección",
+  prueba: "En prueba",
+  listo: "Listo",
+  entregado: "Entregado",
+};
+
+const CATEGORIAS_FOTO = {
+  reuniones: "Reuniones",
+  creacion: "Creación",
+  confeccion: "Confección",
+  pruebas: "Pruebas",
+  final: "Final",
+};
+
+const TIPOS_EVENTO = {
+  casamiento: "Casamiento",
+  bar_mitzvah: "Bar/Bat Mitzvah",
+  quince: "15 años",
+  cumpleanos: "Cumpleaños",
+  aniversario: "Aniversario",
+  otro: "Otro",
+};
+
+let __fotosCache = {}; // proyectoId -> [{id, categoria, data, ...}]
+let __presupuestosCache = {}; // proyectoId -> [{id, pdfData, ...}]
+let __portfolioBuilderFotos = [];
+let __portfolioBuilderSeleccion = new Set();
+let __portfolioFiltroTipoEvento = "";
+let __portfolioFiltroColor = "";
+
+// ------------------------------------------------------------
+// Presupuestador: rubros, frases por evento y tipografías
+// ------------------------------------------------------------
+const RUBROS_CONTENIDO = {
+  gastronomia: { label: "Gastronomía / Restaurantes", icono: "🍽" },
+  indumentaria: { label: "Indumentaria / Moda", icono: "👗" },
+  bazar: { label: "Bazar / Regalos", icono: "🎁" },
+  salud: { label: "Salud / Estética", icono: "💆" },
+  inmobiliaria: { label: "Inmobiliaria", icono: "🏠" },
+  tecnologia: { label: "Tecnología / Servicios", icono: "💻" },
+  otro: { label: "Otro rubro", icono: "✨" },
+};
+
+const FRASES_EVENTO = {
+  casamiento: { icono: "💍", frase: "Quiero acompañarte en tu casamiento" },
+  bar_mitzvah: { icono: "✡", frase: "Quiero ser parte de tu Bar/Bat Mitzvah" },
+  quince: { icono: "👑", frase: "Quiero acompañarte en tus 15" },
+  cumpleanos: { icono: "🎉", frase: "Quiero ser parte de tu festejo" },
+  aniversario: { icono: "💐", frase: "Quiero acompañarte en tu aniversario" },
+  otro: { icono: "✨", frase: "Quiero acompañarte en tu evento" },
+};
+
+const FUENTES_PRESUPUESTO = {
+  playfair: { label: "Playfair Display (elegante)", css: "'Playfair Display', serif" },
+  poppins: { label: "Poppins (moderna)", css: "'Poppins', sans-serif" },
+  montserrat: { label: "Montserrat (clásica)", css: "'Montserrat', sans-serif" },
+  dancing: { label: "Dancing Script (cursiva)", css: "'Dancing Script', cursive" },
+  quicksand: { label: "Quicksand (suave)", css: "'Quicksand', sans-serif" },
+};
+
+const OPCIONES_SEGUIMIENTO = [
+  { dias: 0, label: "No recordarme" },
+  { dias: 3, label: "En 3 días" },
+  { dias: 5, label: "En 5 días" },
+  { dias: 7, label: "En 7 días" },
+  { dias: 10, label: "En 10 días" },
+  { dias: 15, label: "En 15 días" },
+];
+
+let __presupuestadorContexto = null; // { modulo, proyectoId }
+let __presupuestadorScopeSeleccion = null; // datos recolectados del formulario
+let __presupuestadorPdfDataUri = null;
+let __presupuestadorPackSeleccionado = null; // id de pack, "personalizado", o null
+
+const PRODUCTOS = { reels: "Reels", historias: "Historias", videos: "Videos" };
+const FRECUENCIAS = { unico: "Único", semanal: "Semanal", quincenal: "Quincenal", mensual: "Mensual" };
+
+// ------------------------------------------------------------
+// Inicialización / login
+// ------------------------------------------------------------
+function init() {
+  if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey.startsWith("PEGAR_AQUI")) {
+    document.body.innerHTML = "<p style='padding:40px;font-family:sans-serif;'>Falta configurar config.js.</p>";
+    return;
+  }
+  firebase.initializeApp(window.FIREBASE_CONFIG);
+  auth = firebase.auth();
+  db = firebase.firestore();
+
+  completeEmailLinkSignInIfNeeded();
+
+  auth.onAuthStateChanged((u) => {
+    user = u;
+    if (u) {
+      showApp();
+      loadAll();
+    } else {
+      if (piezasUnsub) { piezasUnsub(); piezasUnsub = null; }
+      state = {
+        clientes: [], proyectos: [], packs: [], piezas: [],
+        clientesDesign: [], proyectosDesign: [], portfolios: [],
+        brandConfig: { contenido: null, design: null },
+        presupuestosGenerados: [],
+        paletas: [],
+      };
+      showLogin();
+    }
+  });
+
+  document.getElementById("login-btn").addEventListener("click", handleLogin);
+  document.getElementById("logout-btn").addEventListener("click", () => auth.signOut());
+
+  document.querySelectorAll("#modulo-contenido nav.tabs button[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
+      document.querySelectorAll("#modulo-contenido nav.tabs button[data-tab]").forEach((b) => b.classList.toggle("active", b === btn));
+      document.getElementById("tab-clientes").style.display = activeTab === "clientes" ? "block" : "none";
+      document.getElementById("tab-proyectos").style.display = activeTab === "proyectos" ? "block" : "none";
+      document.getElementById("tab-packs").style.display = activeTab === "packs" ? "block" : "none";
+      document.getElementById("tab-presupuestos").style.display = activeTab === "presupuestos" ? "block" : "none";
+      renderAll();
+    });
+  });
+
+  document.querySelectorAll("#modulo-design nav.tabs button[data-tab-design]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activeTabDesign = btn.dataset.tabDesign;
+      document.querySelectorAll("#modulo-design nav.tabs button[data-tab-design]").forEach((b) => b.classList.toggle("active", b === btn));
+      document.getElementById("tab-clientesDesign").style.display = activeTabDesign === "clientesDesign" ? "block" : "none";
+      document.getElementById("tab-proyectosDesign").style.display = activeTabDesign === "proyectosDesign" ? "block" : "none";
+      document.getElementById("tab-portfolioDesign").style.display = activeTabDesign === "portfolioDesign" ? "block" : "none";
+      document.getElementById("tab-presupuestosDesign").style.display = activeTabDesign === "presupuestosDesign" ? "block" : "none";
+      renderAll();
+    });
+  });
+}
+
+function setModulo(m) {
+  moduloActivo = m;
+  document.querySelectorAll(".module-switch button").forEach((b) => b.classList.toggle("active", b.dataset.modulo === m));
+  document.getElementById("modulo-contenido").style.display = m === "contenido" ? "block" : "none";
+  document.getElementById("modulo-design").style.display = m === "design" ? "block" : "none";
+  renderAll();
+}
+
+function irAPortfolioDesign() {
+  setModulo("design");
+  const btn = document.querySelector('#modulo-design nav.tabs button[data-tab-design="portfolioDesign"]');
+  if (btn) btn.click();
+}
+
+function completeEmailLinkSignInIfNeeded() {
+  if (auth.isSignInWithEmailLink(window.location.href)) {
+    let email = window.localStorage.getItem("emailForSignIn");
+    if (!email) email = window.prompt("Confirme su email para completar el ingreso:");
+    auth
+      .signInWithEmailLink(email, window.location.href)
+      .then(() => {
+        window.localStorage.removeItem("emailForSignIn");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      })
+      .catch((err) => alert("No se pudo completar el ingreso: " + err.message));
+  }
+}
+
+function showLogin() {
+  document.getElementById("login-screen").style.display = "flex";
+  document.getElementById("app").style.display = "none";
+}
+function showApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  document.getElementById("user-email").textContent = user.email;
+}
+
+async function handleLogin() {
+  const email = document.getElementById("login-email").value.trim();
+  const msg = document.getElementById("login-msg");
+  if (!email) return;
+  msg.textContent = "Enviando...";
+  msg.className = "msg";
+  try {
+    await auth.sendSignInLinkToEmail(email, { url: window.location.href, handleCodeInApp: true });
+    window.localStorage.setItem("emailForSignIn", email);
+    msg.textContent = "Listo. Revise su email y toque el link para entrar.";
+    msg.className = "msg ok";
+  } catch (err) {
+    msg.textContent = "Error: " + err.message;
+    msg.className = "msg error";
+  }
+}
+
+// ------------------------------------------------------------
+// Datos (Firestore)
+// ------------------------------------------------------------
+async function loadAll() {
+  const uid = user.uid;
+  const [clientesSnap, proyectosSnap, packsSnap, clientesDesignSnap, proyectosDesignSnap, portfoliosSnap, brandConfigSnap, presupuestosGenSnap, paletasSnap] = await Promise.all([
+    db.collection("clientes").where("ownerId", "==", uid).get(),
+    db.collection("proyectosSimple").where("ownerId", "==", uid).get(),
+    db.collection("packs").where("ownerId", "==", uid).get(),
+    db.collection("clientesDesign").where("ownerId", "==", uid).get(),
+    db.collection("proyectosDesign").where("ownerId", "==", uid).get(),
+    db.collection("portfoliosDesign").where("ownerId", "==", uid).get(),
+    db.collection("brandConfig").where("ownerId", "==", uid).get(),
+    db.collection("presupuestosGenerados").where("ownerId", "==", uid).get(),
+    db.collection("paletasColores").where("ownerId", "==", uid).get(),
+  ]);
+  state.clientes = clientesSnap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  state.proyectos = proyectosSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  state.packs = packsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  state.clientesDesign = clientesDesignSnap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  state.proyectosDesign = proyectosDesignSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  state.portfolios = portfoliosSnap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+  state.brandConfig = { contenido: null, design: null };
+  brandConfigSnap.docs.forEach((d) => {
+    const data = d.data();
+    if (data.modulo === "contenido" || data.modulo === "design") state.brandConfig[data.modulo] = { id: d.id, ...data };
+  });
+  state.presupuestosGenerados = presupuestosGenSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+  state.paletas = paletasSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.createdAtMillis || 0) - (b.createdAtMillis || 0));
+
+  // Cargamos las piezas de cada proyecto directamente (no depende de ningún índice especial
+  // de Firestore, a diferencia de la consulta "todas juntas" de más abajo). Esto garantiza que
+  // el checklist de cada proyecto siempre se vea, aunque ese índice no esté creado todavía.
+  try {
+    const piezasPorProyecto = await Promise.all(
+      state.proyectos.map((p) =>
+        db.collection("proyectosSimple").doc(p.id).collection("piezas").where("ownerId", "==", uid).get()
+      )
+    );
+    const piezasCargadas = [];
+    state.proyectos.forEach((p, i) => {
+      piezasPorProyecto[i].docs.forEach((d) => piezasCargadas.push({ id: d.id, proyectoId: p.id, ...d.data() }));
+    });
+    state.piezas = piezasCargadas;
+  } catch (err) {
+    console.error("Error cargando piezas por proyecto:", err);
+  }
+
+  renderAll();
+  startPiezasListener(uid);
+}
+
+function startPiezasListener(uid) {
+  if (piezasUnsub) return;
+  piezasUnsub = db.collectionGroup("piezas").where("ownerId", "==", uid).onSnapshot(
+    (snap) => {
+      state.piezas = snap.docs.map((d) => ({ id: d.id, proyectoId: d.ref.parent.parent.id, ...d.data() }));
+      renderAll();
+      // si el modal de un proyecto está abierto, lo refrescamos para reflejar cambios en vivo,
+      // pero NUNCA si hay un campo del modal siendo editado en este momento (para no borrar lo que está escribiendo)
+      const editandoAlgo = document.activeElement && document.getElementById("modal-root").contains(document.activeElement);
+      if (window.__openProyectoModalId && !editandoAlgo) {
+        openProyectoModal(window.__openProyectoModalId, true);
+      }
+    },
+    (err) => {
+      console.error("Error escuchando piezas:", err);
+    }
+  );
+}
+
+function renderAll() {
+  renderStats();
+  renderClientes();
+  renderProyectos();
+  renderPacks();
+  renderStatsDesign();
+  renderClientesDesign();
+  renderProyectosDesign();
+  renderPortfolioDesign();
+  renderPresupuestosTab("contenido");
+  renderPresupuestosTab("design");
+  renderSeguimientosAlert("contenido");
+  renderSeguimientosAlert("design");
+}
+
+function piezasForProyecto(proyectoId) {
+  return state.piezas
+    .filter((pz) => pz.proyectoId === proyectoId)
+    .sort((a, b) => (a.tipo === b.tipo ? a.numero - b.numero : String(a.tipo).localeCompare(String(b.tipo))));
+}
+
+function proyectoPiezasStats(proyectoId) {
+  const piezas = piezasForProyecto(proyectoId);
+  return {
+    total: piezas.length,
+    entregadas: piezas.filter((p) => p.entregada).length,
+    sinRevisar: piezas.filter((p) => p.vistoPorMi === false).length,
+  };
+}
+
+function renderStats() {
+  const totalClientes = state.clientes.length;
+  const proyectosActivos = state.proyectos.filter((p) => p.estado !== "publicado").length;
+  const piezasPendientes = state.proyectos.reduce((sum, p) => {
+    if (p.estado === "publicado") return sum;
+    return sum + Math.max(0, proyectoPiezasStats(p.id).total - proyectoPiezasStats(p.id).entregadas);
+  }, 0);
+  const piezasPorRevisar = state.piezas.filter((pz) => pz.vistoPorMi === false).length;
+  const seguimientosHoy = seguimientosPendientesCount("contenido");
+  document.getElementById("stats").innerHTML = `
+    <div class="stat-tile frame-ticks"><div class="label">Clientes</div><div class="value">${totalClientes}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Proyectos activos</div><div class="value">${proyectosActivos}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Piezas pendientes</div><div class="value">${piezasPendientes}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Piezas por revisar</div><div class="value">${piezasPorRevisar}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Seguimientos hoy</div><div class="value">${seguimientosHoy}</div></div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Clientes
+// ------------------------------------------------------------
+function renderClientes() {
+  const el = document.getElementById("tab-clientes");
+  el.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="filtro-clientes" placeholder="Buscar cliente..." oninput="renderClientes()" />
+      <button class="btn primary" onclick="openClienteModal()">+ Nuevo cliente</button>
+    </div>
+    <table>
+      <thead><tr><th>Cliente / Marca</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Instagram</th><th>Rubro</th><th></th></tr></thead>
+      <tbody id="clientes-tbody"></tbody>
+    </table>
+  `;
+  const filtro = (document.getElementById("filtro-clientes")?.value || "").toLowerCase();
+  const tbody = document.getElementById("clientes-tbody");
+  const filtered = state.clientes.filter((c) => c.nombre.toLowerCase().includes(filtro));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${state.clientes.length === 0 ? "Todavía no cargó ningún cliente." : "Sin resultados."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map(
+      (c) => `<tr>
+        <td><strong>${esc(c.nombre)}</strong>${c.notas ? `<div class="muted">${esc(c.notas)}</div>` : ""}</td>
+        <td>${esc(c.contacto) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.telefono) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.email) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.instagram) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.rubro) || '<span class="muted">-</span>'}</td>
+        <td>
+          <button class="btn small" onclick="openClienteModal('${c.id}')">Editar</button>
+          <button class="btn small danger" onclick="deleteCliente('${c.id}')">Borrar</button>
+        </td>
+      </tr>`
+    )
+    .join("");
+}
+
+function openClienteModal(id) {
+  const c = id ? state.clientes.find((x) => x.id === id) : null;
+  openModal(`
+    <h2>${c ? "Editar cliente" : "Nuevo cliente"}</h2>
+    <div class="field"><label>Cliente / Marca *</label><input id="f-nombre" value="${c ? escAttr(c.nombre) : ""}" placeholder="Ej: Restaurante La Parolaccia" /></div>
+    <div class="field-row">
+      <div class="field"><label>Nombre de contacto</label><input id="f-contacto" value="${c && c.contacto ? escAttr(c.contacto) : ""}" /></div>
+      <div class="field"><label>Rubro</label><input id="f-rubro" value="${c && c.rubro ? escAttr(c.rubro) : ""}" placeholder="Gastronomía, moda..." /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Teléfono</label><input id="f-telefono" value="${c && c.telefono ? escAttr(c.telefono) : ""}" /></div>
+      <div class="field"><label>Instagram</label><input id="f-instagram" value="${c && c.instagram ? escAttr(c.instagram) : ""}" placeholder="@usuario" /></div>
+    </div>
+    <div class="field"><label>Email</label><input id="f-email" value="${c && c.email ? escAttr(c.email) : ""}" /></div>
+    <div class="field"><label>Notas</label><textarea id="f-notas">${c && c.notas ? esc(c.notas) : ""}</textarea></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveCliente('${id || ""}')">Guardar</button>
+    </div>
+  `);
+}
+
+async function saveCliente(id) {
+  const nombre = document.getElementById("f-nombre").value.trim();
+  if (!nombre) { alert("Ingrese el nombre del cliente."); return; }
+  const data = {
+    nombre,
+    contacto: document.getElementById("f-contacto").value.trim(),
+    telefono: document.getElementById("f-telefono").value.trim(),
+    email: document.getElementById("f-email").value.trim(),
+    instagram: document.getElementById("f-instagram").value.trim(),
+    rubro: document.getElementById("f-rubro").value.trim(),
+    notas: document.getElementById("f-notas").value.trim(),
+  };
+  if (id) {
+    await db.collection("clientes").doc(id).update(data);
+  } else {
+    data.ownerId = user.uid;
+    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection("clientes").add(data);
+  }
+  closeModal();
+  await loadAll();
+}
+
+async function deleteCliente(id) {
+  const usado = state.proyectos.some((p) => p.clienteId === id);
+  if (usado && !confirm("Este cliente tiene proyectos cargados. Si lo borra, esos proyectos quedan sin cliente asignado. ¿Continuar?")) return;
+  if (!usado && !confirm("¿Borrar este cliente?")) return;
+  await db.collection("clientes").doc(id).delete();
+  await loadAll();
+}
+
+// ------------------------------------------------------------
+// Proyectos
+// ------------------------------------------------------------
+function renderProyectos() {
+  const el = document.getElementById("tab-proyectos");
+  if (state.clientes.length === 0) {
+    el.innerHTML = `<div class="empty-row" style="padding:30px;text-align:center;color:var(--text-dim);">Primero cargue al menos un cliente en la pestaña "Clientes".</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="filtro-proyectos" placeholder="Buscar proyecto..." oninput="renderProyectos()" />
+      <button class="btn primary" onclick="openProyectoModal()">+ Nuevo proyecto</button>
+    </div>
+    <table>
+      <thead><tr><th>Cliente</th><th>Proyecto</th><th>Piezas</th><th>Pendientes</th><th>Estado</th><th>Entrega</th><th></th></tr></thead>
+      <tbody id="proyectos-tbody"></tbody>
+    </table>
+  `;
+  const filtro = (document.getElementById("filtro-proyectos")?.value || "").toLowerCase();
+  const tbody = document.getElementById("proyectos-tbody");
+  const filtered = state.proyectos.filter(
+    (p) => p.descripcion.toLowerCase().includes(filtro) || clienteNombre(p.clienteId).toLowerCase().includes(filtro)
+  );
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${state.proyectos.length === 0 ? "Todavía no cargó ningún proyecto." : "Sin resultados."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map((p) => {
+      const st = proyectoPiezasStats(p.id);
+      const pendientes = Math.max(0, st.total - st.entregadas);
+      return `<tr>
+        <td>${esc(clienteNombre(p.clienteId))}</td>
+        <td>${esc(p.descripcion)}${p.packNombre ? `<div class="muted">Plan: ${esc(p.packNombre)}</div>` : ""}${p.presupuesto != null ? `<div class="muted">Presupuesto: ${formatMoney(p.presupuesto)}</div>` : ""}${p.notas ? `<div class="muted">${esc(p.notas)}</div>` : ""}${st.sinRevisar > 0 ? `<div style="color:var(--warn);font-weight:600;font-size:12px;margin-top:2px;">● ${st.sinRevisar} respuesta${st.sinRevisar > 1 ? "s" : ""} sin revisar</div>` : ""}</td>
+        <td>${st.entregadas} / ${st.total}</td>
+        <td>${pendientes}</td>
+        <td><span class="badge ${p.estado}">${ESTADOS[p.estado]}</span></td>
+        <td>${p.fechaLimite ? formatDate(p.fechaLimite) : '<span class="muted">-</span>'}</td>
+        <td>
+          <button class="btn small" onclick="openPresupuestadorModal('contenido','${p.id}')">Presupuesto</button>
+          <button class="btn small" onclick="openProyectoModal('${p.id}')">Editar</button>
+          <button class="btn small danger" onclick="deleteProyecto('${p.id}')">Borrar</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function clienteNombre(id) {
+  const c = state.clientes.find((x) => x.id === id);
+  return c ? c.nombre : "(cliente eliminado)";
+}
+
+async function openProyectoModal(id, isRefresh) {
+  window.__openProyectoModalId = id || null;
+  const p = id ? state.proyectos.find((x) => x.id === id) : null;
+
+  // migración automática de proyectos viejos (piezas guardadas como lista adentro del proyecto)
+  if (p && p.piezas && p.piezas.length && piezasForProyecto(id).length === 0 && !isRefresh) {
+    await migrateOldPiezas(p);
+  }
+
+  const clienteOptions = state.clientes
+    .map((c) => `<option value="${c.id}" ${p && p.clienteId === c.id ? "selected" : ""}>${esc(c.nombre)}</option>`)
+    .join("");
+  const packOptions =
+    `<option value="">Personalizado (sin pack)</option>` +
+    state.packs
+      .map((pk) => `<option value="${pk.id}" ${p && p.packId === pk.id ? "selected" : ""}>${esc(pk.nombre)} — ${packItemsText(pk.items)}</option>`)
+      .join("");
+
+  const existingPiezas = id ? piezasForProyecto(id) : [];
+
+  let checklistHtml;
+  if (!id) {
+    checklistHtml = `<div class="muted" style="padding:8px 0;">Elija un plan o ingrese una cantidad de piezas. El checklist se genera automáticamente al guardar.</div>`;
+  } else if (existingPiezas.length === 0) {
+    checklistHtml = `<div class="muted" style="padding:8px 0;">Todavía no hay piezas. Elija un plan o ingrese una cantidad y toque "Generar checklist".</div>`;
+  } else {
+    checklistHtml = existingPiezas.map((pz) => piezaRowHtml(pz)).join("");
+  }
+
+  openModal(`
+    <h2>${p ? "Editar proyecto" : "Nuevo proyecto"}</h2>
+    <div class="field"><label>Cliente *</label><select id="f-cliente">${clienteOptions}</select></div>
+    <div class="field"><label>Proyecto / Descripción *</label><input id="f-descripcion" value="${p ? escAttr(p.descripcion) : ""}" placeholder="Ej: Pack apertura de local" /></div>
+    <div class="field"><label>Plan contratado</label><select id="f-pack" onchange="onProyectoPackChange()">${packOptions}</select></div>
+    <div class="field-row">
+      <div class="field"><label>Cantidad de piezas (si no elige un plan)</label><input id="f-totales" type="number" min="0" value="${existingPiezas.length || 1}" /></div>
+      <div class="field" style="max-width:170px;display:flex;align-items:flex-end;">
+        <button type="button" class="btn small" style="width:100%;" onclick="onGenerarChecklistClick('${id || ""}')" ${!id ? "disabled title='Guarde el proyecto primero'" : ""}>Generar checklist</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Piezas del proyecto — marque a medida que las sube, guarde el link y envíela a aprobación</label>
+      <div id="piezas-checklist">${checklistHtml}</div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Estado</label>
+        <select id="f-estado">${Object.entries(ESTADOS).map(([k, v]) => `<option value="${k}" ${p && p.estado === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Fecha límite</label><input id="f-fecha" type="date" value="${p && p.fechaLimite ? p.fechaLimite : ""}" /></div>
+    </div>
+    <div class="field"><label>Presupuesto</label><input id="f-presupuesto" type="number" min="0" step="0.01" value="${p && p.presupuesto != null ? p.presupuesto : ""}" placeholder="Ej: 50000 (déjelo vacío si no aplica)" /></div>
+    <div class="field"><label>Notas</label><textarea id="f-notas-p">${p && p.notas ? esc(p.notas) : ""}</textarea></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal(); window.__openProyectoModalId = null;">Cerrar</button>
+      <button class="btn primary" onclick="saveProyecto('${id || ""}')">Guardar</button>
+    </div>
+  `);
+}
+
+function packItemsText(items) {
+  if (!items || items.length === 0) return "";
+  return items.map((it) => `${it.cantidad} ${PRODUCTOS[it.producto] || it.producto}`).join(" + ");
+}
+
+function buildPiezasFromPack(pack) {
+  const piezas = [];
+  (pack.items || []).forEach((it) => {
+    for (let i = 1; i <= (Number(it.cantidad) || 0); i++) {
+      piezas.push({ tipo: it.producto, numero: i, entregada: false, link: "" });
+    }
+  });
+  return piezas;
+}
+
+function buildGenericPiezas(n, entregadasIniciales) {
+  const piezas = [];
+  for (let i = 1; i <= n; i++) {
+    piezas.push({ tipo: "pieza", numero: i, entregada: entregadasIniciales ? i <= entregadasIniciales : false, link: "" });
+  }
+  return piezas;
+}
+
+const ESTADOS_APROBACION = {
+  sin_enviar: "Sin enviar",
+  pendiente: "Pendiente de respuesta",
+  aprobado: "Aprobado",
+  cambios: "Cambios solicitados",
+};
+
+function piezaRowHtml(pz) {
+  const label = pz.tipo === "pieza" ? `Pieza ${pz.numero}` : `${PRODUCTOS[pz.tipo] || pz.tipo} ${pz.numero}`;
+  const estado = pz.estadoAprobacion || "sin_enviar";
+  const tieneLink = !!(pz.link && pz.link.trim());
+  return `
+    <div class="pieza-row" data-proyecto-id="${pz.proyectoId}" data-pieza-id="${pz.id}" style="padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" class="pieza-check" ${pz.entregada ? "checked" : ""} style="width:auto;flex:none;" onchange="onPiezaEntregadaChange(this)" />
+        <span class="pieza-label" style="min-width:100px;font-size:13px;">${esc(label)}</span>
+        <input type="text" class="pieza-link" placeholder="Link del archivo (Drive, WeTransfer, etc.)" value="${escAttr(pz.link || "")}" onblur="onPiezaLinkBlur(this)" />
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;margin-left:26px;flex-wrap:wrap;">
+        <span class="badge ${estado}">${ESTADOS_APROBACION[estado]}</span>
+        ${!tieneLink ? '<span class="muted" style="font-size:12px;">Cargue el link para poder enviar a aprobación</span>' : `
+          <button type="button" class="btn small" onclick="shareWhatsApp(this)" title="Compartir por WhatsApp">WhatsApp</button>
+          <button type="button" class="btn small" onclick="shareEmail(this)" title="Compartir por email">Email</button>
+          <button type="button" class="btn small" onclick="shareRedes(this)" title="Compartir a otra red">Redes</button>
+        `}
+      </div>
+      ${estado === "cambios" && pz.comentarioCambios ? `<div style="margin-left:26px;margin-top:6px;font-size:13px;color:var(--critical);">"${esc(pz.comentarioCambios)}"</div>` : ""}
+    </div>
+  `;
+}
+
+async function onPiezaEntregadaChange(checkbox) {
+  const row = checkbox.closest(".pieza-row");
+  const proyectoId = row.dataset.proyectoId;
+  const piezaId = row.dataset.piezaId;
+  try {
+    await db.collection("proyectosSimple").doc(proyectoId).collection("piezas").doc(piezaId).update({ entregada: checkbox.checked });
+  } catch (err) {
+    alert("No se pudo guardar: " + err.message);
+    checkbox.checked = !checkbox.checked;
+  }
+}
+
+async function onPiezaLinkBlur(input) {
+  const row = input.closest(".pieza-row");
+  const proyectoId = row.dataset.proyectoId;
+  const piezaId = row.dataset.piezaId;
+  const valor = input.value.trim();
+  try {
+    await db.collection("proyectosSimple").doc(proyectoId).collection("piezas").doc(piezaId).update({ link: valor });
+    const existente = state.piezas.find((p) => p.id === piezaId && p.proyectoId === proyectoId);
+    if (existente) existente.link = valor;
+  } catch (err) {
+    alert("No se pudo guardar el link: " + err.message);
+  }
+}
+
+function approvalUrl(proyectoId, piezaId) {
+  const base = window.location.href.replace(/index\.html.*$/, "").replace(/\?.*$/, "");
+  return base + `aprobacion-pieza.html?p=${proyectoId}&z=${piezaId}`;
+}
+
+async function markEnviadaSiCorresponde(proyectoId, piezaId, row) {
+  const badge = row.querySelector(".badge");
+  const estadoActual = badge ? badge.className.replace("badge ", "").trim() : "sin_enviar";
+  if (estadoActual === "sin_enviar" || estadoActual === "cambios") {
+    await db.collection("proyectosSimple").doc(proyectoId).collection("piezas").doc(piezaId).update({
+      estadoAprobacion: "pendiente",
+      comentarioCambios: "",
+    });
+  }
+}
+
+function getPiezaContextFromButton(btn) {
+  const row = btn.closest(".pieza-row");
+  const proyectoId = row.dataset.proyectoId;
+  const piezaId = row.dataset.piezaId;
+  const link = row.querySelector(".pieza-link").value.trim();
+  const label = row.querySelector(".pieza-label").textContent.trim();
+  return { row, proyectoId, piezaId, link, label };
+}
+
+async function shareWhatsApp(btn) {
+  const { row, proyectoId, piezaId, link, label } = getPiezaContextFromButton(btn);
+  if (!link) { alert("Primero cargue el link de esta pieza."); return; }
+  await markEnviadaSiCorresponde(proyectoId, piezaId, row);
+  const aprobUrl = approvalUrl(proyectoId, piezaId);
+  const text = encodeURIComponent(`${label}\nVer contenido: ${link}\nAprobar o pedir cambios acá: ${aprobUrl}`);
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
+
+async function shareEmail(btn) {
+  const { row, proyectoId, piezaId, link, label } = getPiezaContextFromButton(btn);
+  if (!link) { alert("Primero cargue el link de esta pieza."); return; }
+  await markEnviadaSiCorresponde(proyectoId, piezaId, row);
+  const aprobUrl = approvalUrl(proyectoId, piezaId);
+  const subject = encodeURIComponent(label);
+  const body = encodeURIComponent(`Ver contenido: ${link}\n\nAprobar o pedir cambios acá: ${aprobUrl}`);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+async function shareRedes(btn) {
+  const { row, proyectoId, piezaId, link, label } = getPiezaContextFromButton(btn);
+  if (!link) { alert("Primero cargue el link de esta pieza."); return; }
+  await markEnviadaSiCorresponde(proyectoId, piezaId, row);
+  const aprobUrl = approvalUrl(proyectoId, piezaId);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: label, text: `${label} — aprobar o pedir cambios:`, url: aprobUrl });
+    } catch (e) {
+      // canceló el menú de compartir
+    }
+  } else {
+    try {
+      await navigator.clipboard.writeText(aprobUrl);
+      alert("Link de aprobación copiado. Péguelo donde quiera compartirlo.");
+    } catch (e) {
+      alert("No se pudo compartir automáticamente. Copie el link manualmente:\n" + aprobUrl);
+    }
+  }
+}
+
+async function migrateOldPiezas(proyecto) {
+  const col = db.collection("proyectosSimple").doc(proyecto.id).collection("piezas");
+  const batch = db.batch();
+  proyecto.piezas.forEach((pz) => {
+    const ref = col.doc();
+    batch.set(ref, {
+      tipo: pz.tipo,
+      numero: pz.numero,
+      entregada: !!pz.entregada,
+      link: pz.link || "",
+      estadoAprobacion: "sin_enviar",
+      comentarioCambios: "",
+      vistoPorMi: true,
+      proyectoDescripcion: proyecto.descripcion,
+      clienteNombre: clienteNombre(proyecto.clienteId),
+      ownerId: user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  await batch.commit();
+  await db.collection("proyectosSimple").doc(proyecto.id).update({ piezas: firebase.firestore.FieldValue.delete() });
+  const snap = await col.where("ownerId", "==", user.uid).get();
+  state.piezas = state.piezas
+    .filter((p) => p.proyectoId !== proyecto.id)
+    .concat(snap.docs.map((d) => ({ id: d.id, proyectoId: proyecto.id, ...d.data() })));
+}
+
+async function generatePiezasChecklistAsync(proyectoId, clienteId, descripcion, packId, cantidadManual, replace) {
+  let piezasDef;
+  if (packId) {
+    const pack = state.packs.find((x) => x.id === packId);
+    piezasDef = pack ? buildPiezasFromPack(pack) : [];
+  } else {
+    piezasDef = buildGenericPiezas(cantidadManual || 0);
+  }
+  if (piezasDef.length === 0) return false;
+
+  const col = db.collection("proyectosSimple").doc(proyectoId).collection("piezas");
+  const batch = db.batch();
+  if (replace) {
+    // consultamos Firestore directo (no la copia local, que puede estar desactualizada)
+    // para asegurarnos de borrar TODO lo viejo antes de crear lo nuevo y evitar duplicados
+    let existingSnap;
+    try {
+      existingSnap = await col.where("ownerId", "==", user.uid).get();
+    } catch (err) {
+      throw new Error(`No se pudo revisar las piezas existentes antes de reemplazar: ${err.message}`);
+    }
+    existingSnap.docs.forEach((d) => batch.delete(d.ref));
+  }
+  const clienteNombreVal = clienteNombre(clienteId);
+  piezasDef.forEach((pz) => {
+    const ref = col.doc();
+    batch.set(ref, {
+      tipo: pz.tipo,
+      numero: pz.numero,
+      entregada: false,
+      link: "",
+      estadoAprobacion: "sin_enviar",
+      comentarioCambios: "",
+      vistoPorMi: true,
+      proyectoDescripcion: descripcion,
+      clienteNombre: clienteNombreVal,
+      ownerId: user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  try {
+    await batch.commit();
+  } catch (err) {
+    throw new Error(`Al crear las piezas (uid=${user && user.uid ? user.uid : "sin-uid"}): ${err.message}`);
+  }
+
+  let snap;
+  try {
+    snap = await col.where("ownerId", "==", user.uid).get();
+  } catch (err) {
+    throw new Error(`Las piezas se crearon pero no se pudieron releer: ${err.message}`);
+  }
+  state.piezas = state.piezas
+    .filter((p) => p.proyectoId !== proyectoId)
+    .concat(snap.docs.map((d) => ({ id: d.id, proyectoId, ...d.data() })));
+  return true;
+}
+
+async function onGenerarChecklistClick(id) {
+  if (!id) return;
+  const existing = piezasForProyecto(id);
+  if (existing.length > 0) {
+    if (!confirm('Esto reemplaza el checklist actual (se pierden las marcas, links y respuestas de aprobación ya cargadas). ¿Continuar?')) return;
+  }
+  try {
+    const packId = document.getElementById("f-pack").value || null;
+    const cantidad = parseInt(document.getElementById("f-totales").value, 10) || 0;
+    const clienteId = document.getElementById("f-cliente").value;
+    const descripcion = document.getElementById("f-descripcion").value.trim();
+    const ok = await generatePiezasChecklistAsync(id, clienteId, descripcion, packId, cantidad, true);
+    if (!ok) { alert("Elija un plan, o ingrese una cantidad mayor a 0."); return; }
+    await openProyectoModal(id, true);
+  } catch (err) {
+    alert("No se pudo generar el checklist: " + err.message);
+  }
+}
+
+function onProyectoPackChange() {
+  const packId = document.getElementById("f-pack").value;
+  if (!packId) return;
+  const pack = state.packs.find((x) => x.id === packId);
+  if (!pack) return;
+  const total = (pack.items || []).reduce((sum, it) => sum + (Number(it.cantidad) || 0), 0);
+  document.getElementById("f-totales").value = total;
+}
+
+async function saveProyecto(id) {
+  const descripcion = document.getElementById("f-descripcion").value.trim();
+  if (!descripcion) { alert("Ingrese la descripción del proyecto."); return; }
+  const packId = document.getElementById("f-pack").value || null;
+  const pack = packId ? state.packs.find((x) => x.id === packId) : null;
+  const clienteId = document.getElementById("f-cliente").value;
+
+  const presupuestoVal = document.getElementById("f-presupuesto").value;
+  const data = {
+    clienteId,
+    descripcion,
+    packId,
+    packNombre: pack ? pack.nombre : null,
+    estado: document.getElementById("f-estado").value,
+    fechaLimite: document.getElementById("f-fecha").value || null,
+    presupuesto: presupuestoVal === "" ? null : parseFloat(presupuestoVal),
+    notas: document.getElementById("f-notas-p").value.trim(),
+  };
+
+  try {
+    if (id) {
+      await db.collection("proyectosSimple").doc(id).update(data);
+      closeModal();
+      window.__openProyectoModalId = null;
+      await loadAll();
+    } else {
+      data.ownerId = user.uid;
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection("proyectosSimple").add(data);
+      const cantidad = parseInt(document.getElementById("f-totales").value, 10) || 0;
+      await generatePiezasChecklistAsync(ref.id, clienteId, descripcion, packId, cantidad, false);
+      closeModal();
+      await loadAll();
+      openProyectoModal(ref.id);
+    }
+  } catch (err) {
+    alert("No se pudo guardar el proyecto: " + err.message);
+  }
+}
+
+async function deleteProyecto(id) {
+  if (!confirm("¿Borrar este proyecto? También se borran sus piezas.")) return;
+  const piezas = piezasForProyecto(id);
+  const batch = db.batch();
+  const col = db.collection("proyectosSimple").doc(id).collection("piezas");
+  piezas.forEach((pz) => batch.delete(col.doc(pz.id)));
+  batch.delete(db.collection("proyectosSimple").doc(id));
+  await batch.commit();
+  window.__openProyectoModalId = null;
+  await loadAll();
+}
+
+// ------------------------------------------------------------
+// Packs de servicio
+// ------------------------------------------------------------
+function renderPacks() {
+  const el = document.getElementById("tab-packs");
+  el.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="filtro-packs" placeholder="Buscar pack..." oninput="renderPacks()" />
+      <button class="btn primary" onclick="openPackModal()">+ Nuevo pack</button>
+    </div>
+    <table>
+      <thead><tr><th>Pack</th><th>Contenido</th><th>Precio</th><th>Frecuencia</th><th></th></tr></thead>
+      <tbody id="packs-tbody"></tbody>
+    </table>
+  `;
+  const filtro = (document.getElementById("filtro-packs")?.value || "").toLowerCase();
+  const tbody = document.getElementById("packs-tbody");
+  const filtered = state.packs.filter((p) => p.nombre.toLowerCase().includes(filtro));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">${state.packs.length === 0 ? "Todavía no cargó ningún pack." : "Sin resultados."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map(
+      (p) => `<tr>
+        <td><strong>${esc(p.nombre)}</strong>${p.notas ? `<div class="muted">${esc(p.notas)}</div>` : ""}</td>
+        <td>${packItemsSummary(p.items)}</td>
+        <td>${p.precio != null ? formatMoney(p.precio) : '<span class="muted">-</span>'}</td>
+        <td>${FRECUENCIAS[p.frecuencia] || '<span class="muted">-</span>'}</td>
+        <td>
+          <button class="btn small" onclick="openPackModal('${p.id}')">Editar</button>
+          <button class="btn small danger" onclick="deletePack('${p.id}')">Borrar</button>
+        </td>
+      </tr>`
+    )
+    .join("");
+}
+
+function packItemsSummary(items) {
+  if (!items || items.length === 0) return '<span class="muted">-</span>';
+  return items.map((it) => `<span class="badge ${it.producto}">${it.cantidad} ${PRODUCTOS[it.producto] || it.producto}</span>`).join(" ");
+}
+
+function packItemRowHtml(producto, cantidad) {
+  return `
+    <div class="field-row pack-item-row" style="align-items:flex-end;">
+      <div class="field">
+        <label>Producto</label>
+        <select class="pack-item-producto">${Object.entries(PRODUCTOS).map(([k, v]) => `<option value="${k}" ${producto === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+      <div class="field" style="max-width:100px;">
+        <label>Cantidad</label>
+        <input class="pack-item-cantidad" type="number" min="1" value="${cantidad || 1}" />
+      </div>
+      <div class="field" style="max-width:44px;flex:none;">
+        <label>&nbsp;</label>
+        <button type="button" class="btn small danger" onclick="this.closest('.pack-item-row').remove()">✕</button>
+      </div>
+    </div>
+  `;
+}
+
+function addPackItemRow(producto, cantidad) {
+  document.getElementById("pack-items").insertAdjacentHTML("beforeend", packItemRowHtml(producto || "reels", cantidad || 1));
+}
+
+function openPackModal(id) {
+  const p = id ? state.packs.find((x) => x.id === id) : null;
+  const initialItems = p && p.items && p.items.length ? p.items : [{ producto: "reels", cantidad: 1 }];
+  openModal(`
+    <h2>${p ? "Editar pack" : "Nuevo pack"}</h2>
+    <div class="field"><label>Nombre del pack *</label><input id="f-pack-nombre" value="${p ? escAttr(p.nombre) : ""}" placeholder="Ej: Pack Básico Mensual" /></div>
+
+    <label>Contenido del pack (puede combinar productos)</label>
+    <div id="pack-items">${initialItems.map((it) => packItemRowHtml(it.producto, it.cantidad)).join("")}</div>
+    <button type="button" class="btn small" onclick="addPackItemRow()" style="margin-bottom:14px;">+ Agregar producto</button>
+
+    <div class="field-row">
+      <div class="field"><label>Precio</label><input id="f-pack-precio" type="number" min="0" step="0.01" value="${p && p.precio != null ? p.precio : ""}" placeholder="Ej: 50000" /></div>
+      <div class="field"><label>Frecuencia</label>
+        <select id="f-pack-frecuencia">${Object.entries(FRECUENCIAS).map(([k, v]) => `<option value="${k}" ${p && p.frecuencia === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="field"><label>Notas</label><textarea id="f-pack-notas">${p && p.notas ? esc(p.notas) : ""}</textarea></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="savePack('${id || ""}')">Guardar</button>
+    </div>
+  `);
+}
+
+async function savePack(id) {
+  const nombre = document.getElementById("f-pack-nombre").value.trim();
+  if (!nombre) { alert("Ingrese el nombre del pack."); return; }
+
+  const items = Array.from(document.querySelectorAll("#pack-items .pack-item-row")).map((row) => ({
+    producto: row.querySelector(".pack-item-producto").value,
+    cantidad: parseInt(row.querySelector(".pack-item-cantidad").value, 10) || 0,
+  })).filter((it) => it.cantidad > 0);
+
+  if (items.length === 0) { alert("Agregue al menos un producto con cantidad mayor a 0."); return; }
+
+  const precioVal = document.getElementById("f-pack-precio").value;
+  const data = {
+    nombre,
+    items,
+    precio: precioVal === "" ? null : parseFloat(precioVal),
+    frecuencia: document.getElementById("f-pack-frecuencia").value,
+    notas: document.getElementById("f-pack-notas").value.trim(),
+  };
+  if (id) {
+    await db.collection("packs").doc(id).update(data);
+  } else {
+    data.ownerId = user.uid;
+    data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection("packs").add(data);
+  }
+  closeModal();
+  await loadAll();
+}
+
+async function deletePack(id) {
+  if (!confirm("¿Borrar este pack?")) return;
+  await db.collection("packs").doc(id).delete();
+  await loadAll();
+}
+
+// ------------------------------------------------------------
+// Laila Design: Clientes
+// ------------------------------------------------------------
+function renderStatsDesign() {
+  const totalClientes = state.clientesDesign.length;
+  const proyectosActivos = state.proyectosDesign.filter((p) => p.estado !== "entregado").length;
+  const presupuestoTotal = state.proyectosDesign.reduce((sum, p) => sum + (p.estado !== "entregado" && p.precio != null ? Number(p.precio) : 0), 0);
+  const seguimientosHoy = seguimientosPendientesCount("design");
+  document.getElementById("stats-design").innerHTML = `
+    <div class="stat-tile frame-ticks"><div class="label">Clientes</div><div class="value">${totalClientes}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Proyectos activos</div><div class="value">${proyectosActivos}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Valor en curso</div><div class="value" style="font-size:19px;">${formatMoney(presupuestoTotal)}</div></div>
+    <div class="stat-tile frame-ticks"><div class="label">Seguimientos hoy</div><div class="value">${seguimientosHoy}</div></div>
+  `;
+}
+
+function renderClientesDesign() {
+  const el = document.getElementById("tab-clientesDesign");
+  el.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="filtro-clientesDesign" placeholder="Buscar cliente..." oninput="renderClientesDesign()" />
+      <button class="btn primary" onclick="openClienteDesignModal()">+ Nuevo cliente</button>
+    </div>
+    <table>
+      <thead><tr><th>Cliente</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Instagram</th><th></th></tr></thead>
+      <tbody id="clientesDesign-tbody"></tbody>
+    </table>
+  `;
+  const filtro = (document.getElementById("filtro-clientesDesign")?.value || "").toLowerCase();
+  const tbody = document.getElementById("clientesDesign-tbody");
+  const filtered = state.clientesDesign.filter((c) => c.nombre.toLowerCase().includes(filtro));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">${state.clientesDesign.length === 0 ? "Todavía no cargó ningún cliente." : "Sin resultados."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map(
+      (c) => `<tr>
+        <td><strong>${esc(c.nombre)}</strong>${c.notas ? `<div class="muted">${esc(c.notas)}</div>` : ""}</td>
+        <td>${esc(c.contacto) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.telefono) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.email) || '<span class="muted">-</span>'}</td>
+        <td>${esc(c.instagram) || '<span class="muted">-</span>'}</td>
+        <td>
+          <button class="btn small" onclick="openClienteDesignModal('${c.id}')">Editar</button>
+          <button class="btn small danger" onclick="deleteClienteDesign('${c.id}')">Borrar</button>
+        </td>
+      </tr>`
+    )
+    .join("");
+}
+
+function openClienteDesignModal(id) {
+  const c = id ? state.clientesDesign.find((x) => x.id === id) : null;
+  openModal(`
+    <h2>${c ? "Editar cliente" : "Nuevo cliente"} — Laila Design</h2>
+    <div class="field"><label>Cliente *</label><input id="f-cd-nombre" value="${c ? escAttr(c.nombre) : ""}" placeholder="Ej: María Pérez" /></div>
+    <div class="field-row">
+      <div class="field"><label>Teléfono</label><input id="f-cd-telefono" value="${c && c.telefono ? escAttr(c.telefono) : ""}" /></div>
+      <div class="field"><label>Instagram</label><input id="f-cd-instagram" value="${c && c.instagram ? escAttr(c.instagram) : ""}" placeholder="@usuario" /></div>
+    </div>
+    <div class="field"><label>Email</label><input id="f-cd-email" value="${c && c.email ? escAttr(c.email) : ""}" /></div>
+    <div class="field"><label>Evento / Ocasión habitual</label><input id="f-cd-contacto" value="${c && c.contacto ? escAttr(c.contacto) : ""}" placeholder="Ej: 15 años, casamiento..." /></div>
+    <div class="field"><label>Notas</label><textarea id="f-cd-notas">${c && c.notas ? esc(c.notas) : ""}</textarea></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveClienteDesign('${id || ""}')">Guardar</button>
+    </div>
+  `);
+}
+
+async function saveClienteDesign(id) {
+  const nombre = document.getElementById("f-cd-nombre").value.trim();
+  if (!nombre) { alert("Ingrese el nombre del cliente."); return; }
+  const data = {
+    nombre,
+    contacto: document.getElementById("f-cd-contacto").value.trim(),
+    telefono: document.getElementById("f-cd-telefono").value.trim(),
+    email: document.getElementById("f-cd-email").value.trim(),
+    instagram: document.getElementById("f-cd-instagram").value.trim(),
+    notas: document.getElementById("f-cd-notas").value.trim(),
+  };
+  try {
+    if (id) {
+      await db.collection("clientesDesign").doc(id).update(data);
+    } else {
+      data.ownerId = user.uid;
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection("clientesDesign").add(data);
+    }
+    closeModal();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo guardar el cliente: " + err.message);
+  }
+}
+
+async function deleteClienteDesign(id) {
+  const usado = state.proyectosDesign.some((p) => p.clienteId === id);
+  if (usado && !confirm("Este cliente tiene proyectos cargados. Si lo borra, esos proyectos quedan sin cliente asignado. ¿Continuar?")) return;
+  if (!usado && !confirm("¿Borrar este cliente?")) return;
+  await db.collection("clientesDesign").doc(id).delete();
+  await loadAll();
+}
+
+function clienteDesignNombre(id) {
+  const c = state.clientesDesign.find((x) => x.id === id);
+  return c ? c.nombre : "(cliente eliminado)";
+}
+
+// ------------------------------------------------------------
+// Laila Design: Proyectos (presupuesto de tela / mano de obra / insumos)
+// ------------------------------------------------------------
+function renderProyectosDesign() {
+  const el = document.getElementById("tab-proyectosDesign");
+  if (state.clientesDesign.length === 0) {
+    el.innerHTML = `<div class="empty-row" style="padding:30px;text-align:center;color:var(--text-dim);">Primero cargue al menos un cliente en la pestaña "Clientes".</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="filtro-proyectosDesign" placeholder="Buscar proyecto..." oninput="renderProyectosDesign()" />
+      <button class="btn primary" onclick="openProyectoDesignModal()">+ Nuevo proyecto</button>
+    </div>
+    <table>
+      <thead><tr><th>Cliente</th><th>Diseño</th><th>Precio</th><th>Estado</th><th>Entrega</th><th></th></tr></thead>
+      <tbody id="proyectosDesign-tbody"></tbody>
+    </table>
+  `;
+  const filtro = (document.getElementById("filtro-proyectosDesign")?.value || "").toLowerCase();
+  const tbody = document.getElementById("proyectosDesign-tbody");
+  const filtered = state.proyectosDesign.filter(
+    (p) => p.diseno.toLowerCase().includes(filtro) || clienteDesignNombre(p.clienteId).toLowerCase().includes(filtro)
+  );
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">${state.proyectosDesign.length === 0 ? "Todavía no cargó ningún proyecto." : "Sin resultados."}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered
+    .map(
+      (p) => `<tr>
+        <td>${esc(clienteDesignNombre(p.clienteId))}</td>
+        <td>${esc(p.diseno)}${tipoEventoLabel(p) || p.colores ? `<div class="muted">${[tipoEventoLabel(p), p.colores].filter(Boolean).map(esc).join(" · ")}</div>` : ""}${p.notas ? `<div class="muted">${esc(p.notas)}</div>` : ""}</td>
+        <td>${p.precio != null ? formatMoney(p.precio) : '<span class="muted">-</span>'}</td>
+        <td><span class="badge ${p.estado}">${ESTADOS_DESIGN[p.estado] || p.estado}</span></td>
+        <td>${p.plazoEntrega ? formatDate(p.plazoEntrega) : '<span class="muted">-</span>'}</td>
+        <td>
+          <button class="btn small" onclick="openProyectoDesignDetalle('${p.id}')">Fotos / Presupuesto</button>
+          <button class="btn small" onclick="openPresupuestadorModal('design','${p.id}')">Presupuestador</button>
+          <button class="btn small" onclick="openProyectoDesignModal('${p.id}')">Editar</button>
+          <button class="btn small danger" onclick="deleteProyectoDesign('${p.id}')">Borrar</button>
+        </td>
+      </tr>`
+    )
+    .join("");
+}
+
+function openProyectoDesignModal(id) {
+  const p = id ? state.proyectosDesign.find((x) => x.id === id) : null;
+  const clienteOptions = state.clientesDesign
+    .map((c) => `<option value="${c.id}" ${p && p.clienteId === c.id ? "selected" : ""}>${esc(c.nombre)}</option>`)
+    .join("");
+  openModal(`
+    <h2>${p ? "Editar proyecto" : "Nuevo proyecto"} — Laila Design</h2>
+    <div class="field"><label>Cliente *</label><select id="f-pd-cliente">${clienteOptions}</select></div>
+    <div class="field"><label>Diseño / Descripción *</label><input id="f-pd-diseno" value="${p ? escAttr(p.diseno) : ""}" placeholder="Ej: Vestido de gala bordado" /></div>
+    <div class="field-row">
+      <div class="field"><label>Costo de tela</label><input id="f-pd-tela" type="number" min="0" step="0.01" value="${p && p.costoTela != null ? p.costoTela : ""}" /></div>
+      <div class="field"><label>Costo de mano de obra</label><input id="f-pd-manoobra" type="number" min="0" step="0.01" value="${p && p.costoManoObra != null ? p.costoManoObra : ""}" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Costo de insumos</label><input id="f-pd-insumos" type="number" min="0" step="0.01" value="${p && p.costoInsumos != null ? p.costoInsumos : ""}" /></div>
+      <div class="field"><label>Precio final al cliente</label><input id="f-pd-precio" type="number" min="0" step="0.01" value="${p && p.precio != null ? p.precio : ""}" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de evento</label>
+        <select id="f-pd-tipoevento" onchange="onTipoEventoChange()">
+          <option value="">Sin especificar</option>
+          ${Object.entries(TIPOS_EVENTO).map(([k, v]) => `<option value="${k}" ${p && p.tipoEvento === k ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>Colores</label><input id="f-pd-colores" value="${p && p.colores ? escAttr(p.colores) : ""}" placeholder="Ej: rojo, dorado" /></div>
+    </div>
+    <div class="field" id="f-pd-tipoevento-otro-wrap" style="${p && p.tipoEvento === "otro" ? "" : "display:none;"}">
+      <label>Especificar tipo de evento</label>
+      <input id="f-pd-tipoevento-otro" value="${p && p.tipoEventoOtro ? escAttr(p.tipoEventoOtro) : ""}" />
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Estado</label>
+        <select id="f-pd-estado">${Object.entries(ESTADOS_DESIGN).map(([k, v]) => `<option value="${k}" ${p && p.estado === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Plazo de entrega</label><input id="f-pd-plazo" type="date" value="${p && p.plazoEntrega ? p.plazoEntrega : ""}" /></div>
+    </div>
+    <div class="field"><label>Notas</label><textarea id="f-pd-notas">${p && p.notas ? esc(p.notas) : ""}</textarea></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveProyectoDesign('${id || ""}')">Guardar</button>
+    </div>
+  `);
+}
+
+function onTipoEventoChange() {
+  const val = document.getElementById("f-pd-tipoevento").value;
+  document.getElementById("f-pd-tipoevento-otro-wrap").style.display = val === "otro" ? "block" : "none";
+}
+
+function tipoEventoLabel(p) {
+  if (!p || !p.tipoEvento) return "";
+  if (p.tipoEvento === "otro") return p.tipoEventoOtro || "Otro";
+  return TIPOS_EVENTO[p.tipoEvento] || p.tipoEvento;
+}
+
+async function saveProyectoDesign(id) {
+  const diseno = document.getElementById("f-pd-diseno").value.trim();
+  if (!diseno) { alert("Ingrese el diseño / descripción del proyecto."); return; }
+  const num = (elId) => {
+    const v = document.getElementById(elId).value;
+    return v === "" ? null : parseFloat(v);
+  };
+  const tipoEvento = document.getElementById("f-pd-tipoevento").value || null;
+  const data = {
+    clienteId: document.getElementById("f-pd-cliente").value,
+    diseno,
+    costoTela: num("f-pd-tela"),
+    costoManoObra: num("f-pd-manoobra"),
+    costoInsumos: num("f-pd-insumos"),
+    precio: num("f-pd-precio"),
+    tipoEvento,
+    tipoEventoOtro: tipoEvento === "otro" ? document.getElementById("f-pd-tipoevento-otro").value.trim() : "",
+    colores: document.getElementById("f-pd-colores").value.trim(),
+    estado: document.getElementById("f-pd-estado").value,
+    plazoEntrega: document.getElementById("f-pd-plazo").value || null,
+    notas: document.getElementById("f-pd-notas").value.trim(),
+  };
+  try {
+    if (id) {
+      await db.collection("proyectosDesign").doc(id).update(data);
+    } else {
+      data.ownerId = user.uid;
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection("proyectosDesign").add(data);
+    }
+    closeModal();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo guardar el proyecto: " + err.message);
+  }
+}
+
+async function deleteProyectoDesign(id) {
+  if (!confirm("¿Borrar este proyecto?")) return;
+  await db.collection("proyectosDesign").doc(id).delete();
+  await loadAll();
+}
+
+// ------------------------------------------------------------
+// Laila Design: fotos por proyecto (guardadas comprimidas en la
+// base de datos, sin usar Firebase Storage)
+// ------------------------------------------------------------
+function compressImageFile(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else { w = Math.round((w * maxDim) / h); h = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality || 0.72));
+      };
+      img.onerror = () => reject(new Error("No se pudo leer la imagen."));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function loadFotosProyecto(id) {
+  const snap = await db.collection("proyectosDesign").doc(id).collection("fotos").where("ownerId", "==", user.uid).get();
+  __fotosCache[id] = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.createdAtMillis || 0) - (b.createdAtMillis || 0));
+}
+
+async function loadPresupuestosProyecto(id) {
+  const snap = await db.collection("proyectosDesign").doc(id).collection("presupuestos").where("ownerId", "==", user.uid).get();
+  __presupuestosCache[id] = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+}
+
+async function openProyectoDesignDetalle(id) {
+  const p = state.proyectosDesign.find((x) => x.id === id);
+  if (!p) return;
+  openModalWide(`<div id="detalle-design-root">Cargando...</div>`);
+  try {
+    await Promise.all([loadFotosProyecto(id), loadPresupuestosProyecto(id)]);
+    renderDetalleDesign(id);
+  } catch (err) {
+    document.getElementById("detalle-design-root").innerHTML = `<h2>No se pudo cargar</h2><p>${esc(err.message)}</p><div class="row-end"><button class="btn" onclick="closeModal()">Cerrar</button></div>`;
+  }
+}
+
+function renderDetalleDesign(id) {
+  const root = document.getElementById("detalle-design-root");
+  if (!root) return;
+  const p = state.proyectosDesign.find((x) => x.id === id);
+  if (!p) return;
+  const cliente = clienteDesignNombre(p.clienteId);
+  const fotos = __fotosCache[id] || [];
+  const presupuestos = __presupuestosCache[id] || [];
+
+  const categoriasHtml = Object.entries(CATEGORIAS_FOTO)
+    .map(([key, label]) => {
+      const fotosCat = fotos.filter((f) => f.categoria === key);
+      return `
+        <div class="field" style="margin-bottom:16px;">
+          <label>${label} (${fotosCat.length})</label>
+          <input type="file" accept="image/*" multiple id="foto-input-${key}" style="display:none;" onchange="onFotoInputChange('${id}','${key}',this)" />
+          <button type="button" class="btn small" onclick="document.getElementById('foto-input-${key}').click()">+ Subir fotos</button>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+            ${
+              fotosCat
+                .map(
+                  (f) => `
+              <div style="position:relative;">
+                <img src="${f.data}" style="width:88px;height:88px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" />
+                <button type="button" class="btn small danger" style="position:absolute;top:2px;right:2px;padding:1px 5px;font-size:10px;line-height:1.4;" onclick="deleteFotoDesign('${id}','${f.id}')">✕</button>
+              </div>`
+                )
+                .join("") || '<span class="muted" style="font-size:12.5px;">Sin fotos todavía.</span>'
+            }
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  const presupuestosHtml =
+    presupuestos.length === 0
+      ? '<span class="muted" style="font-size:12.5px;">Todavía no generó ningún presupuesto para este proyecto.</span>'
+      : presupuestos
+          .map(
+            (pr) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="font-size:12.5px;flex:1;">${pr.createdAtMillis ? new Date(pr.createdAtMillis).toLocaleString("es-AR") : ""}</span>
+          <button type="button" class="btn small" onclick="downloadPresupuesto('${id}','${pr.id}')">Descargar</button>
+          <button type="button" class="btn small" onclick="sharePresupuestoWhatsApp('${id}','${pr.id}')">WhatsApp</button>
+          <button type="button" class="btn small" onclick="sharePresupuestoEmail('${id}','${pr.id}')">Email</button>
+        </div>`
+          )
+          .join("");
+
+  root.innerHTML = `
+    <h2>${esc(cliente)} — ${esc(p.diseno)}</h2>
+    <p class="muted" style="margin-top:-8px;">${p.precio != null ? formatMoney(p.precio) : "Sin precio cargado"} · Entrega: ${p.plazoEntrega ? formatDate(p.plazoEntrega) : "sin definir"}${tipoEventoLabel(p) ? ` · ${esc(tipoEventoLabel(p))}` : ""}${p.colores ? ` · ${esc(p.colores)}` : ""}</p>
+
+    <div class="field" style="background:var(--panel-2);padding:12px;border-radius:8px;margin-bottom:16px;">
+      <label style="margin-bottom:8px;">Presupuesto (imagen con marca @__lailadesign, en PDF)</label>
+      <button type="button" class="btn primary small" onclick="generatePresupuestoPDF('${id}')">Generar presupuesto PDF</button>
+      <div style="margin-top:10px;">${presupuestosHtml}</div>
+    </div>
+
+    <div class="field">
+      <label style="font-size:14px;color:var(--text);font-weight:600;">Fotos del proyecto (van también al portfolio)</label>
+      ${categoriasHtml}
+    </div>
+
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cerrar</button>
+    </div>
+  `;
+}
+
+async function onFotoInputChange(proyectoId, categoria, input) {
+  const files = Array.from(input.files || []);
+  if (files.length === 0) return;
+  try {
+    for (const file of files) {
+      const dataUrl = await compressImageFile(file, 1000, 0.72);
+      await db
+        .collection("proyectosDesign")
+        .doc(proyectoId)
+        .collection("fotos")
+        .add({
+          categoria,
+          data: dataUrl,
+          ownerId: user.uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAtMillis: Date.now(),
+        });
+    }
+    await loadFotosProyecto(proyectoId);
+    renderDetalleDesign(proyectoId);
+  } catch (err) {
+    alert("No se pudo subir alguna foto: " + err.message);
+  }
+  input.value = "";
+}
+
+async function deleteFotoDesign(proyectoId, fotoId) {
+  if (!confirm("¿Borrar esta foto?")) return;
+  try {
+    await db.collection("proyectosDesign").doc(proyectoId).collection("fotos").doc(fotoId).delete();
+    await loadFotosProyecto(proyectoId);
+    renderDetalleDesign(proyectoId);
+  } catch (err) {
+    alert("No se pudo borrar la foto: " + err.message);
+  }
+}
+
+// ------------------------------------------------------------
+// Laila Design: generador de presupuesto (imagen + PDF con marca)
+// ------------------------------------------------------------
+function wrapPdfText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text).split(" ");
+  let line = "";
+  let curY = y;
+  words.forEach((word) => {
+    const test = line + word + " ";
+    if (ctx.measureText(test).width > maxWidth && line !== "") {
+      ctx.fillText(line, x, curY);
+      line = word + " ";
+      curY += lineHeight;
+    } else {
+      line = test;
+    }
+  });
+  ctx.fillText(line, x, curY);
+  return curY;
+}
+
+function buildPresupuestoCanvas(p, cliente) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 700;
+  canvas.height = 900;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#f2ebdd";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#6b6152";
+  ctx.fillRect(0, 0, canvas.width, 130);
+  ctx.fillStyle = "#faf6ee";
+  ctx.font = "bold 40px sans-serif";
+  ctx.fillText("LAILA DESIGN", 40, 65);
+  ctx.font = "20px sans-serif";
+  ctx.fillText("@__lailadesign", 40, 100);
+
+  ctx.fillStyle = "#332e26";
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillText("Presupuesto", 40, 175);
+
+  let y = 235;
+  const campos = [
+    ["Cliente", cliente],
+    ["Diseño", p.diseno],
+    ["Plazo de entrega", p.plazoEntrega ? formatDate(p.plazoEntrega) : "A confirmar"],
+    ["Precio", p.precio != null ? formatMoney(p.precio) : "A confirmar"],
+  ];
+  campos.forEach(([label, val]) => {
+    ctx.fillStyle = "#83786a";
+    ctx.font = "15px sans-serif";
+    ctx.fillText(label.toUpperCase(), 40, y);
+    ctx.fillStyle = "#332e26";
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillText(String(val), 40, y + 30);
+    y += 78;
+  });
+
+  if (p.notas) {
+    ctx.fillStyle = "#83786a";
+    ctx.font = "15px sans-serif";
+    ctx.fillText("NOTAS", 40, y);
+    ctx.fillStyle = "#332e26";
+    ctx.font = "17px sans-serif";
+    wrapPdfText(ctx, p.notas, 40, y + 26, canvas.width - 80, 22);
+  }
+
+  ctx.fillStyle = "#83786a";
+  ctx.font = "13px sans-serif";
+  ctx.fillText("Generado el " + new Date().toLocaleDateString("es-AR"), 40, canvas.height - 30);
+
+  return canvas;
+}
+
+async function generatePresupuestoPDF(id) {
+  const p = state.proyectosDesign.find((x) => x.id === id);
+  if (!p) return;
+  const cliente = clienteDesignNombre(p.clienteId);
+  try {
+    const canvas = buildPresupuestoCanvas(p, cliente);
+    const imgData = canvas.toDataURL("image/jpeg", 0.85);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width, canvas.height] });
+    pdf.addImage(imgData, "JPEG", 0, 0, canvas.width, canvas.height);
+    const pdfDataUri = pdf.output("datauristring");
+
+    await db
+      .collection("proyectosDesign")
+      .doc(id)
+      .collection("presupuestos")
+      .add({
+        pdfData: pdfDataUri,
+        cliente,
+        diseno: p.diseno,
+        precio: p.precio,
+        plazoEntrega: p.plazoEntrega,
+        ownerId: user.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAtMillis: Date.now(),
+      });
+
+    pdf.save(`presupuesto-${cliente}-${p.diseno}.pdf`.replace(/\s+/g, "_"));
+    await loadPresupuestosProyecto(id);
+    renderDetalleDesign(id);
+  } catch (err) {
+    alert("No se pudo generar el presupuesto: " + err.message);
+  }
+}
+
+function downloadDataUri(dataUri, filename) {
+  const a = document.createElement("a");
+  a.href = dataUri;
+  a.download = filename;
+  a.click();
+}
+
+function downloadPresupuesto(proyectoId, presId) {
+  const pres = (__presupuestosCache[proyectoId] || []).find((x) => x.id === presId);
+  if (!pres) return;
+  downloadDataUri(pres.pdfData, `presupuesto-${pres.cliente}.pdf`.replace(/\s+/g, "_"));
+}
+
+function sharePresupuestoWhatsApp(proyectoId, presId) {
+  const pres = (__presupuestosCache[proyectoId] || []).find((x) => x.id === presId);
+  if (!pres) return;
+  downloadDataUri(pres.pdfData, `presupuesto-${pres.cliente}.pdf`.replace(/\s+/g, "_"));
+  const text = encodeURIComponent(`Presupuesto para ${pres.cliente} — ${pres.diseno}. Te acabo de descargar el PDF a tu aparato, adjuntalo acá en el chat.`);
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
+
+function sharePresupuestoEmail(proyectoId, presId) {
+  const pres = (__presupuestosCache[proyectoId] || []).find((x) => x.id === presId);
+  if (!pres) return;
+  downloadDataUri(pres.pdfData, `presupuesto-${pres.cliente}.pdf`.replace(/\s+/g, "_"));
+  const subject = encodeURIComponent(`Presupuesto — ${pres.diseno}`);
+  const body = encodeURIComponent(`Hola ${pres.cliente}, te comparto el presupuesto. Adjunto el PDF que se acaba de descargar a este aparato.`);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+// ------------------------------------------------------------
+// Laila Design: Portfolio (fotos de varios proyectos juntas, para
+// mostrarle a nuevos clientes; queda grabado y se puede volver a
+// descargar/compartir en PDF)
+// ------------------------------------------------------------
+async function loadFotosCliente(clienteId) {
+  const proyectos = state.proyectosDesign.filter((p) => !clienteId || p.clienteId === clienteId);
+  const snaps = await Promise.all(
+    proyectos.map((p) => db.collection("proyectosDesign").doc(p.id).collection("fotos").where("ownerId", "==", user.uid).get())
+  );
+  const fotos = [];
+  proyectos.forEach((p, i) => {
+    snaps[i].docs.forEach((d) =>
+      fotos.push({
+        id: d.id,
+        proyectoId: p.id,
+        proyectoDiseno: p.diseno,
+        clienteId: p.clienteId,
+        tipoEvento: p.tipoEvento || "",
+        tipoEventoLabel: tipoEventoLabel(p),
+        colores: p.colores || "",
+        ...d.data(),
+      })
+    );
+    __fotosCache[p.id] = snaps[i].docs.map((d) => ({ id: d.id, ...d.data() }));
+  });
+  return fotos;
+}
+
+function renderPortfolioDesign() {
+  const el = document.getElementById("tab-portfolioDesign");
+  if (!el) return;
+  el.innerHTML = `
+    <div class="toolbar">
+      <span class="muted" style="font-size:12.5px;">Arme portfolios reutilizables con fotos de sus proyectos para mostrarle a clientes nuevos.</span>
+      <button class="btn primary" onclick="openPortfolioBuilderModal()">+ Nuevo portfolio</button>
+    </div>
+    <table>
+      <thead><tr><th>Título</th><th>Cliente</th><th>Fotos</th><th></th></tr></thead>
+      <tbody id="portfolios-tbody"></tbody>
+    </table>
+  `;
+  const tbody = document.getElementById("portfolios-tbody");
+  const list = state.portfolios || [];
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">Todavía no armó ningún portfolio.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list
+    .map(
+      (pf) => `
+    <tr>
+      <td><strong>${esc(pf.titulo)}</strong></td>
+      <td>${pf.clienteId ? esc(clienteDesignNombre(pf.clienteId)) : '<span class="muted">Todos</span>'}</td>
+      <td>${(pf.fotosRefs || []).length}</td>
+      <td>
+        <button class="btn small" onclick="generatePortfolioPDF('${pf.id}')">Descargar PDF</button>
+        <button class="btn small" onclick="sharePortfolioWhatsApp('${pf.id}')">WhatsApp</button>
+        <button class="btn small" onclick="sharePortfolioEmail('${pf.id}')">Email</button>
+        <button class="btn small danger" onclick="deletePortfolio('${pf.id}')">Borrar</button>
+      </td>
+    </tr>`
+    )
+    .join("");
+}
+
+async function openPortfolioBuilderModal() {
+  const clienteOptions =
+    `<option value="">Todos los clientes</option>` +
+    state.clientesDesign.map((c) => `<option value="${c.id}">${esc(c.nombre)}</option>`).join("");
+  __portfolioBuilderFotos = [];
+  __portfolioBuilderSeleccion = new Set();
+  __portfolioFiltroTipoEvento = "";
+  __portfolioFiltroColor = "";
+  openModalWide(`
+    <h2>Nuevo portfolio</h2>
+    <div class="field"><label>Título</label><input id="f-pf-titulo" placeholder="Ej: Portfolio vestidos de fiesta" /></div>
+    <div class="field"><label>Cliente (opcional, para filtrar las fotos)</label><select id="f-pf-cliente">${clienteOptions}</select></div>
+    <button type="button" class="btn small" onclick="onPortfolioCargarFotos()" style="margin-bottom:10px;">Cargar fotos</button>
+    <div id="portfolio-fotos-root" class="field"><span class="muted">Elija un cliente (o "Todos") y toque "Cargar fotos".</span></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="savePortfolio()">Generar y guardar</button>
+    </div>
+  `);
+}
+
+async function onPortfolioCargarFotos() {
+  const clienteId = document.getElementById("f-pf-cliente").value;
+  document.getElementById("portfolio-fotos-root").innerHTML = "Cargando fotos...";
+  try {
+    __portfolioBuilderFotos = await loadFotosCliente(clienteId || null);
+    __portfolioBuilderSeleccion = new Set(__portfolioBuilderFotos.map((f) => f.proyectoId + "_" + f.id));
+    renderPortfolioBuilderFotos();
+  } catch (err) {
+    document.getElementById("portfolio-fotos-root").innerHTML = `<span class="msg error">No se pudieron cargar las fotos: ${esc(err.message)}</span>`;
+  }
+}
+
+function renderPortfolioBuilderFotos() {
+  const root = document.getElementById("portfolio-fotos-root");
+  if (!root) return;
+  if (__portfolioBuilderFotos.length === 0) {
+    root.innerHTML = '<span class="muted">No hay fotos cargadas todavía para esta selección.</span>';
+    return;
+  }
+
+  const tiposPresentes = [...new Set(__portfolioBuilderFotos.map((f) => f.tipoEvento).filter(Boolean))];
+  const filtradas = __portfolioBuilderFotos.filter((f) => {
+    if (__portfolioFiltroTipoEvento && f.tipoEvento !== __portfolioFiltroTipoEvento) return false;
+    if (__portfolioFiltroColor && !(f.colores || "").toLowerCase().includes(__portfolioFiltroColor.toLowerCase())) return false;
+    return true;
+  });
+  const seleccionadasVisibles = filtradas.filter((f) => __portfolioBuilderSeleccion.has(f.proyectoId + "_" + f.id)).length;
+
+  root.innerHTML = `
+    <div class="field-row">
+      <div class="field"><label>Desglosar por tipo de evento</label>
+        <select id="f-pf-tipoevento" onchange="onPortfolioFiltroChange()">
+          <option value="">Todos</option>
+          ${tiposPresentes.map((t) => `<option value="${t}" ${__portfolioFiltroTipoEvento === t ? "selected" : ""}>${esc(TIPOS_EVENTO[t] || t)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field"><label>Desglosar por color</label><input id="f-pf-color" value="${escAttr(__portfolioFiltroColor)}" placeholder="Ej: rojo" oninput="onPortfolioFiltroChange()" /></div>
+    </div>
+    <label>Fotos a incluir (${seleccionadasVisibles} de ${filtradas.length} visibles seleccionadas)</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${
+        filtradas.length === 0
+          ? '<span class="muted">Ninguna foto coincide con este filtro.</span>'
+          : filtradas
+              .map((f) => {
+                const key = f.proyectoId + "_" + f.id;
+                const checked = __portfolioBuilderSeleccion.has(key);
+                const tip = [f.tipoEventoLabel, f.colores].filter(Boolean).join(" · ");
+                return `
+          <label style="position:relative;cursor:pointer;display:block;" title="${escAttr(tip)}">
+            <img src="${f.data}" style="width:76px;height:76px;object-fit:cover;border-radius:6px;border:2px solid ${checked ? "var(--accent)" : "var(--border)"};" />
+            <input type="checkbox" ${checked ? "checked" : ""} style="position:absolute;top:2px;left:2px;width:auto;" onchange="togglePortfolioFoto('${key}')" />
+          </label>`;
+              })
+              .join("")
+      }
+    </div>
+  `;
+}
+
+function onPortfolioFiltroChange() {
+  __portfolioFiltroTipoEvento = document.getElementById("f-pf-tipoevento").value;
+  __portfolioFiltroColor = document.getElementById("f-pf-color").value.trim();
+  renderPortfolioBuilderFotos();
+}
+
+function togglePortfolioFoto(key) {
+  if (__portfolioBuilderSeleccion.has(key)) __portfolioBuilderSeleccion.delete(key);
+  else __portfolioBuilderSeleccion.add(key);
+  renderPortfolioBuilderFotos();
+}
+
+async function savePortfolio() {
+  const titulo = document.getElementById("f-pf-titulo").value.trim();
+  if (!titulo) { alert("Ingrese un título para el portfolio."); return; }
+  if (__portfolioBuilderSeleccion.size === 0) { alert("Seleccione al menos una foto."); return; }
+  const clienteId = document.getElementById("f-pf-cliente").value || null;
+  const seleccionadas = __portfolioBuilderFotos.filter((f) => __portfolioBuilderSeleccion.has(f.proyectoId + "_" + f.id));
+  const refs = seleccionadas.map((f) => ({ proyectoId: f.proyectoId, fotoId: f.id, categoria: f.categoria }));
+  try {
+    await db.collection("portfoliosDesign").add({
+      titulo,
+      clienteId,
+      fotosRefs: refs,
+      ownerId: user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAtMillis: Date.now(),
+    });
+    closeModal();
+    await loadAll();
+    await generatePortfolioPDF(null, seleccionadas, titulo);
+  } catch (err) {
+    alert("No se pudo guardar el portfolio: " + err.message);
+  }
+}
+
+async function generatePortfolioPDF(portfolioId, fotosDirectas, tituloDirecto) {
+  let fotosData = fotosDirectas;
+  let titulo = tituloDirecto;
+  try {
+    if (!fotosData) {
+      const pf = state.portfolios.find((x) => x.id === portfolioId);
+      if (!pf) return;
+      titulo = pf.titulo;
+      const proyectoIds = [...new Set((pf.fotosRefs || []).map((r) => r.proyectoId))];
+      await Promise.all(proyectoIds.map((pid) => (!__fotosCache[pid] ? loadFotosProyecto(pid) : Promise.resolve())));
+      fotosData = pf.fotosRefs
+        .map((r) => {
+          const foto = (__fotosCache[r.proyectoId] || []).find((f) => f.id === r.fotoId);
+          return foto ? { ...foto, proyectoId: r.proyectoId } : null;
+        })
+        .filter(Boolean);
+    }
+    if (fotosData.length === 0) { alert("Este portfolio no tiene fotos disponibles (puede que se hayan borrado de los proyectos originales)."); return; }
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [700, 900] });
+
+    pdf.setFillColor(242, 235, 221);
+    pdf.rect(0, 0, 700, 900, "F");
+    pdf.setFillColor(107, 97, 82);
+    pdf.rect(0, 0, 700, 130, "F");
+    pdf.setTextColor(250, 246, 238);
+    pdf.setFontSize(34);
+    pdf.text("LAILA DESIGN", 40, 60);
+    pdf.setFontSize(16);
+    pdf.text("@__lailadesign", 40, 95);
+    pdf.setTextColor(51, 46, 38);
+    pdf.setFontSize(24);
+    pdf.text(String(titulo), 40, 175);
+    pdf.setFontSize(12);
+    pdf.setTextColor(131, 120, 106);
+    pdf.text("Portfolio generado el " + new Date().toLocaleDateString("es-AR"), 40, 205);
+
+    for (let i = 0; i < fotosData.length; i += 2) {
+      pdf.addPage([700, 900]);
+      pdf.setFillColor(242, 235, 221);
+      pdf.rect(0, 0, 700, 900, "F");
+      const par = fotosData.slice(i, i + 2);
+      par.forEach((foto, idx) => {
+        const y = 40 + idx * 430;
+        try {
+          pdf.addImage(foto.data, "JPEG", 40, y, 620, 380);
+        } catch (e) {
+          // si una foto individual falla, seguimos con el resto
+        }
+        pdf.setFontSize(12);
+        pdf.setTextColor(131, 120, 106);
+        pdf.text(CATEGORIAS_FOTO[foto.categoria] || foto.categoria || "", 40, y + 400);
+      });
+    }
+
+    const dataUri = pdf.output("datauristring");
+    downloadDataUri(dataUri, `portfolio-${titulo}.pdf`.replace(/\s+/g, "_"));
+    return dataUri;
+  } catch (err) {
+    alert("No se pudo generar el portfolio en PDF: " + err.message);
+  }
+}
+
+async function sharePortfolioWhatsApp(id) {
+  const pf = state.portfolios.find((x) => x.id === id);
+  if (!pf) return;
+  await generatePortfolioPDF(id);
+  const text = encodeURIComponent(`Portfolio "${pf.titulo}" — te acabo de descargar el PDF a tu aparato, adjuntalo acá en el chat.`);
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
+
+async function sharePortfolioEmail(id) {
+  const pf = state.portfolios.find((x) => x.id === id);
+  if (!pf) return;
+  await generatePortfolioPDF(id);
+  const subject = encodeURIComponent(`Portfolio — ${pf.titulo}`);
+  const body = encodeURIComponent(`Hola, te comparto el portfolio "${pf.titulo}". Adjunto el PDF que se acaba de descargar a este aparato.`);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+async function deletePortfolio(id) {
+  if (!confirm('¿Borrar este portfolio? (las fotos originales de los proyectos no se borran, solo esta selección guardada)')) return;
+  try {
+    await db.collection("portfoliosDesign").doc(id).delete();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo borrar el portfolio: " + err.message);
+  }
+}
+
+// ------------------------------------------------------------
+// Datos de marca (aparecen al pie de cada presupuesto generado)
+// ------------------------------------------------------------
+function openBrandConfigModal(modulo) {
+  const cfg = state.brandConfig[modulo] || {};
+  const nombreDefault = modulo === "design" ? "Laila Design" : "";
+  const igDefault = modulo === "design" ? "@__lailadesign" : "";
+  openModal(`
+    <h2>Datos de marca — ${modulo === "contenido" ? "Contenido" : "Laila Design"}</h2>
+    <p class="muted" style="margin-top:-8px;">Estos datos aparecen al pie de cada presupuesto que genere en este módulo.</p>
+    <div class="field"><label>Nombre de la marca</label><input id="bc-nombre" value="${escAttr(cfg.nombreMarca || nombreDefault)}" /></div>
+    <div class="field"><label>WhatsApp</label><input id="bc-whatsapp" value="${escAttr(cfg.whatsapp || "")}" placeholder="Ej: 11 2345-6789" /></div>
+    <div class="field"><label>Instagram</label><input id="bc-instagram" value="${escAttr(cfg.instagram || igDefault)}" placeholder="@usuario" /></div>
+    <div class="field"><label>Email</label><input id="bc-email" value="${escAttr(cfg.email || "")}" /></div>
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn primary" onclick="saveBrandConfig('${modulo}')">Guardar</button>
+    </div>
+  `);
+}
+
+async function saveBrandConfig(modulo) {
+  const data = {
+    modulo,
+    nombreMarca: document.getElementById("bc-nombre").value.trim(),
+    whatsapp: document.getElementById("bc-whatsapp").value.trim(),
+    instagram: document.getElementById("bc-instagram").value.trim(),
+    email: document.getElementById("bc-email").value.trim(),
+  };
+  try {
+    const existing = state.brandConfig[modulo];
+    if (existing && existing.id) {
+      await db.collection("brandConfig").doc(existing.id).update(data);
+    } else {
+      data.ownerId = user.uid;
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection("brandConfig").add(data);
+    }
+    closeModal();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo guardar los datos de marca: " + err.message);
+  }
+}
+
+// ------------------------------------------------------------
+// Presupuestador: arma un presupuesto visual (imagen/PDF) para
+// Contenido o Laila Design, standalone o a partir de un proyecto.
+// ------------------------------------------------------------
+async function openPresupuestadorModal(modulo, proyectoId) {
+  __presupuestadorContexto = { modulo, proyectoId: proyectoId || null };
+  __presupuestadorPackSeleccionado = null;
+  __presupuestadorPdfDataUri = null;
+  __presupuestadorScopeSeleccion = null;
+
+  const clientes = modulo === "contenido" ? state.clientes : state.clientesDesign;
+  const clienteOptions =
+    `<option value="">-- Cliente nuevo / sin cargar --</option>` +
+    clientes.map((c) => `<option value="${c.id}" data-nombre="${escAttr(c.nombre)}">${esc(c.nombre)}</option>`).join("");
+
+  let proyecto = null;
+  if (proyectoId) {
+    proyecto = (modulo === "contenido" ? state.proyectos : state.proyectosDesign).find((p) => p.id === proyectoId);
+  }
+  const nombreCliente = proyecto ? (modulo === "contenido" ? clienteNombre(proyecto.clienteId) : clienteDesignNombre(proyecto.clienteId)) : "";
+  const clienteIdPre = proyecto ? proyecto.clienteId : "";
+
+  const scopeHtml =
+    modulo === "contenido"
+      ? `
+      <div class="field">
+        <label>Alcance del servicio (elija un pack o arme uno personalizado)</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;" id="pp-pack-cards"></div>
+      </div>
+      <div id="pp-personalizado-wrap" style="display:none;">
+        <div class="field-row">
+          <div class="field"><label>Nombre del pack personalizado</label><input id="pp-personalizado-nombre" placeholder="Ej: Pack a medida" /></div>
+          <div class="field"><label>Precio</label><input id="pp-personalizado-precio" type="number" min="0" step="0.01" /></div>
+        </div>
+      </div>
+      <div class="field"><label>Detalle del alcance del servicio</label><textarea id="pp-alcance" placeholder="Ej: 8 reels + 4 historias por mes, incluye guion y edición.">${proyecto && proyecto.notas ? esc(proyecto.notas) : ""}</textarea></div>
+      <div class="field"><label>Rubro del cliente</label>
+        <select id="pp-rubro">${Object.entries(RUBROS_CONTENIDO).map(([k, v]) => `<option value="${k}">${v.icono} ${v.label}</option>`).join("")}</select>
+      </div>
+    `
+      : `
+      <div class="field"><label>Tipo de evento</label>
+        <select id="pp-tipoevento">${Object.entries(TIPOS_EVENTO).map(([k, v]) => `<option value="${k}" ${proyecto && proyecto.tipoEvento === k ? "selected" : ""}>${(FRASES_EVENTO[k] || {}).icono || ""} ${v}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Diseño / alcance del servicio</label><textarea id="pp-alcance" placeholder="Ej: Vestido de gala bordado a mano">${proyecto ? esc(proyecto.diseno) : ""}</textarea></div>
+      <div class="field"><label>Precio</label><input id="pp-precio" type="number" min="0" step="0.01" value="${proyecto && proyecto.precio != null ? proyecto.precio : ""}" /></div>
+    `;
+
+  openModalWide(`
+    <h2>Nuevo presupuesto — ${modulo === "contenido" ? "Contenido" : "Laila Design"}</h2>
+    <div class="field">
+      <label>Cliente</label>
+      <select id="pp-cliente-select" onchange="onPresupuestadorClienteSelectChange()">${clienteOptions}</select>
+    </div>
+    <div class="field">
+      <label>Nombre del cliente / empresa</label>
+      <input id="pp-cliente-nombre" placeholder="Ej: María Pérez" value="${escAttr(nombreCliente)}" />
+    </div>
+
+    ${scopeHtml}
+
+    <div class="field-row">
+      <div class="field"><label>Color 1</label><div class="color-swatch-input"><input type="color" id="pp-color1" value="#6b6152" onchange="renderPaletasGuardadas()" /></div></div>
+      <div class="field"><label>Color 2 (fondo)</label><div class="color-swatch-input"><input type="color" id="pp-color2" value="#f2ebdd" onchange="renderPaletasGuardadas()" /></div></div>
+      <div class="field"><label>Color 3 (detalles)</label><div class="color-swatch-input"><input type="color" id="pp-color3" value="#a3853f" onchange="renderPaletasGuardadas()" /></div></div>
+    </div>
+    <div class="field">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <label style="margin-bottom:0;">Paletas guardadas</label>
+        <button type="button" class="btn small" onclick="guardarPaletaActual()">+ Guardar esta paleta</button>
+      </div>
+      <div id="pp-paletas-root" style="margin-top:8px;"></div>
+    </div>
+    <div class="field"><label>Tipografía</label>
+      <select id="pp-fuente">${Object.entries(FUENTES_PRESUPUESTO).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("")}</select>
+    </div>
+    <div class="field"><label>Recordarme hacer seguimiento</label>
+      <select id="pp-seguimiento">${OPCIONES_SEGUIMIENTO.map((o) => `<option value="${o.dias}" ${o.dias === 5 ? "selected" : ""}>${o.label}</option>`).join("")}</select>
+    </div>
+
+    <div id="pp-preview-root"></div>
+
+    <div class="row-end">
+      <button class="btn" onclick="closeModal()">Cerrar</button>
+      <button class="btn primary" onclick="generatePresupuestadorPreview('${modulo}')">Generar vista previa</button>
+    </div>
+  `);
+
+  if (clienteIdPre) document.getElementById("pp-cliente-select").value = clienteIdPre;
+  if (modulo === "contenido") renderPresupuestadorPackCards();
+  renderPaletasGuardadas();
+}
+
+function renderPaletasGuardadas() {
+  const root = document.getElementById("pp-paletas-root");
+  if (!root) return;
+  if (!state.paletas || state.paletas.length === 0) {
+    root.innerHTML = '<span class="muted" style="font-size:12.5px;">Todavía no guardó ninguna paleta. Elija los tres colores y toque "Guardar esta paleta".</span>';
+    return;
+  }
+  const actuales = [
+    document.getElementById("pp-color1")?.value,
+    document.getElementById("pp-color2")?.value,
+    document.getElementById("pp-color3")?.value,
+  ];
+  root.innerHTML = state.paletas
+    .map((p) => {
+      const activa = p.colores && p.colores[0] === actuales[0] && p.colores[1] === actuales[1] && p.colores[2] === actuales[2];
+      return `
+      <div style="display:inline-flex;align-items:center;gap:6px;border:2px solid ${activa ? "var(--accent)" : "var(--border)"};border-radius:20px;padding:4px 10px 4px 4px;margin:0 8px 8px 0;cursor:pointer;" onclick="aplicarPaletaGuardada('${p.id}')">
+        <span style="display:flex;">
+          ${(p.colores || []).map((c) => `<span style="width:16px;height:16px;border-radius:50%;background:${c};display:inline-block;border:1px solid rgba(0,0,0,0.15);margin-left:-4px;"></span>`).join("")}
+        </span>
+        <span style="font-size:12.5px;">${esc(p.nombre)}</span>
+        <span style="font-size:13px;color:var(--critical);padding:0 2px;" onclick="event.stopPropagation();eliminarPaletaGuardada('${p.id}')">✕</span>
+      </div>`;
+    })
+    .join("");
+}
+
+function aplicarPaletaGuardada(id) {
+  const p = state.paletas.find((x) => x.id === id);
+  if (!p || !p.colores) return;
+  document.getElementById("pp-color1").value = p.colores[0];
+  document.getElementById("pp-color2").value = p.colores[1];
+  document.getElementById("pp-color3").value = p.colores[2];
+  renderPaletasGuardadas();
+}
+
+async function guardarPaletaActual() {
+  const colores = [
+    document.getElementById("pp-color1").value,
+    document.getElementById("pp-color2").value,
+    document.getElementById("pp-color3").value,
+  ];
+  const nombre = prompt("¿Cómo quiere llamar a esta paleta?", "");
+  if (nombre === null) return;
+  const nombreLimpio = nombre.trim() || "Paleta sin nombre";
+  try {
+    await db.collection("paletasColores").add({
+      nombre: nombreLimpio,
+      colores,
+      ownerId: user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAtMillis: Date.now(),
+    });
+    await loadAll();
+    renderPaletasGuardadas();
+  } catch (err) {
+    alert("No se pudo guardar la paleta: " + err.message);
+  }
+}
+
+async function eliminarPaletaGuardada(id) {
+  if (!confirm("¿Borrar esta paleta guardada?")) return;
+  try {
+    await db.collection("paletasColores").doc(id).delete();
+    await loadAll();
+    renderPaletasGuardadas();
+  } catch (err) {
+    alert("No se pudo borrar la paleta: " + err.message);
+  }
+}
+
+function onPresupuestadorClienteSelectChange() {
+  const select = document.getElementById("pp-cliente-select");
+  const opt = select.options[select.selectedIndex];
+  const nombre = opt ? opt.dataset.nombre : "";
+  if (nombre) document.getElementById("pp-cliente-nombre").value = nombre;
+}
+
+function renderPresupuestadorPackCards() {
+  const container = document.getElementById("pp-pack-cards");
+  if (!container) return;
+  const packs = state.packs;
+  const avisoSinPacks = packs.length === 0
+    ? `<p class="muted" style="width:100%;font-size:12.5px;">Todavía no cargó ningún pack en la pestaña "Packs". Puede elegir "Personalizado" para armar uno a medida igual.</p>`
+    : "";
+  const cardsHtml = packs
+    .map(
+      (pk) => `
+    <div class="pack-card ${__presupuestadorPackSeleccionado === pk.id ? "selected" : ""}" onclick="selectPresupuestadorPack('${pk.id}')">
+      <h4>${esc(pk.nombre)}</h4>
+      <p>${packItemsText(pk.items)}</p>
+      <p>${pk.precio != null ? formatMoney(pk.precio) : ""}</p>
+    </div>`
+    )
+    .join("");
+  const personalizadoCard = `
+    <div class="pack-card ${__presupuestadorPackSeleccionado === "personalizado" ? "selected" : ""}" onclick="selectPresupuestadorPack('personalizado')">
+      <h4>Personalizado</h4>
+      <p>Arme un pack a medida</p>
+    </div>`;
+  container.innerHTML = avisoSinPacks + cardsHtml + personalizadoCard;
+  const wrap = document.getElementById("pp-personalizado-wrap");
+  if (wrap) wrap.style.display = __presupuestadorPackSeleccionado === "personalizado" ? "block" : "none";
+}
+
+function selectPresupuestadorPack(id) {
+  __presupuestadorPackSeleccionado = id;
+  renderPresupuestadorPackCards();
+}
+
+function collectPresupuestadorFormData(modulo) {
+  const clienteSelect = document.getElementById("pp-cliente-select");
+  const clienteId = clienteSelect.value || null;
+  const clienteNombreVal = document.getElementById("pp-cliente-nombre").value.trim();
+  if (!clienteNombreVal) { alert("Ingrese el nombre del cliente/empresa."); return null; }
+
+  const color1 = document.getElementById("pp-color1").value;
+  const color2 = document.getElementById("pp-color2").value;
+  const color3 = document.getElementById("pp-color3").value;
+  const fuenteKey = document.getElementById("pp-fuente").value;
+  const diasSeguimiento = parseInt(document.getElementById("pp-seguimiento").value, 10) || 0;
+
+  const base = { modulo, clienteId, clienteNombre: clienteNombreVal, colores: [color1, color2, color3], fuenteKey, diasSeguimiento };
+
+  if (modulo === "contenido") {
+    const alcance = document.getElementById("pp-alcance").value.trim();
+    const rubro = document.getElementById("pp-rubro").value;
+    let scopeNombre, precio;
+    if (__presupuestadorPackSeleccionado === "personalizado") {
+      scopeNombre = document.getElementById("pp-personalizado-nombre").value.trim() || "Pack personalizado";
+      const precioVal = document.getElementById("pp-personalizado-precio").value;
+      precio = precioVal === "" ? null : parseFloat(precioVal);
+    } else if (__presupuestadorPackSeleccionado) {
+      const pack = state.packs.find((p) => p.id === __presupuestadorPackSeleccionado);
+      scopeNombre = pack ? pack.nombre : "Pack";
+      precio = pack ? pack.precio : null;
+    } else {
+      alert("Elija un pack, o toque 'Personalizado' para armar uno a medida.");
+      return null;
+    }
+    return { ...base, scopeNombre, precio, alcance, rubro };
+  } else {
+    const tipoEvento = document.getElementById("pp-tipoevento").value;
+    const alcance = document.getElementById("pp-alcance").value.trim();
+    const precioVal = document.getElementById("pp-precio").value;
+    const precio = precioVal === "" ? null : parseFloat(precioVal);
+    return { ...base, tipoEvento, alcance, precio, scopeNombre: TIPOS_EVENTO[tipoEvento] || "Diseño a medida" };
+  }
+}
+
+function hexToRgba(hex, alpha) {
+  const h = String(hex || "#6b6152").replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const bigint = parseInt(full, 16) || 0;
+  const r = (bigint >> 16) & 255, g = (bigint >> 8) & 255, b = bigint & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Arma la pieza gráfica como HTML/CSS real (gradientes, sombras, tipografía
+// con line-height correcto) y la rasteriza con html2canvas. Da un resultado
+// mucho más prolijo que dibujar formas a mano sobre un <canvas>.
+async function buildPresupuestadorCanvas(modulo, datos) {
+  const fuente = FUENTES_PRESUPUESTO[datos.fuenteKey] || FUENTES_PRESUPUESTO.montserrat;
+  try {
+    await Promise.all([
+      document.fonts.load(`800 48px ${fuente.css}`),
+      document.fonts.load(`700 30px ${fuente.css}`),
+      document.fonts.load(`700 30px 'Dancing Script'`),
+      document.fonts.load(`600 15px ${fuente.css}`),
+      document.fonts.load(`400 16px ${fuente.css}`),
+      document.fonts.load(`400 16px 'Poppins'`),
+      document.fonts.load(`600 16px 'Poppins'`),
+      document.fonts.load(`800 58px 'Playfair Display'`),
+      document.fonts.load(`700 15px 'Playfair Display'`),
+      document.fonts.load(`600 15px 'Playfair Display'`),
+    ]);
+    await document.fonts.ready;
+  } catch (e) {
+    // si falla la carga de la fuente, seguimos con la que haya disponible
+  }
+
+  const brand = state.brandConfig[modulo] || {};
+  const nombreMarca = brand.nombreMarca || (modulo === "design" ? "Laila Design" : "Mi Marca");
+  const igDefault = modulo === "design" ? "@__lailadesign" : "";
+  const instagram = brand.instagram || igDefault;
+  const [c1, c2, c3] = datos.colores;
+  const iconoInfo = modulo === "contenido" ? RUBROS_CONTENIDO[datos.rubro] || RUBROS_CONTENIDO.otro : FRASES_EVENTO[datos.tipoEvento] || FRASES_EVENTO.otro;
+
+  const contactos = [];
+  if (brand.whatsapp) contactos.push(`<span>WHATSAPP &nbsp;${esc(brand.whatsapp)}</span>`);
+  if (instagram) contactos.push(`<span>INSTAGRAM &nbsp;${esc(instagram)}</span>`);
+  if (brand.email) contactos.push(`<span>EMAIL &nbsp;${esc(brand.email)}</span>`);
+
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-99999px";
+  wrapper.style.top = "0";
+  wrapper.style.zIndex = "-1";
+  // La tipografía elegida por la usuaria (a veces decorativa/cursiva) se usa
+  // SOLO en títulos cortos. El cuerpo de texto (párrafos, pie, etiquetas)
+  // siempre usa una tipografía fija y legible, sin importar lo que elija.
+  const fuenteCuerpo = "'Poppins', -apple-system, sans-serif";
+
+  const tituloTexto = (datos.scopeNombre || "Presupuesto").toUpperCase();
+  const tituloSize = tituloTexto.length > 26 ? 32 : tituloTexto.length > 16 ? 42 : 52;
+  const contactosSeparados = contactos.join(`<span style="opacity:0.3;padding:0 14px;">|</span>`);
+  const filete = `<div style="display:flex;align-items:center;justify-content:center;gap:10px;">
+      <div style="height:1px;flex:1;max-width:150px;background:${hexToRgba(c1, 0.35)};"></div>
+      <div style="width:6px;height:6px;background:${c3};transform:rotate(45deg);"></div>
+      <div style="height:1px;flex:1;max-width:150px;background:${hexToRgba(c1, 0.35)};"></div>
+    </div>`;
+  const corner = (top, right, bottom, left) => `position:absolute;${top !== undefined ? `top:${top}px;` : ""}${right !== undefined ? `right:${right}px;` : ""}${bottom !== undefined ? `bottom:${bottom}px;` : ""}${left !== undefined ? `left:${left}px;` : ""}width:26px;height:26px;border-top:${top !== undefined ? `1.5px solid ${hexToRgba(c1, 0.55)}` : "none"};border-bottom:${bottom !== undefined ? `1.5px solid ${hexToRgba(c1, 0.55)}` : "none"};border-left:${left !== undefined ? `1.5px solid ${hexToRgba(c1, 0.55)}` : "none"};border-right:${right !== undefined ? `1.5px solid ${hexToRgba(c1, 0.55)}` : "none"};`;
+
+  wrapper.innerHTML = `
+    <div style="width:760px;font-family:${fuenteCuerpo};background:${c2};position:relative;box-shadow:0 25px 60px rgba(0,0,0,0.16);">
+      <div style="${corner(22, undefined, undefined, 22)}"></div>
+      <div style="${corner(22, 22, undefined, undefined)}"></div>
+      <div style="${corner(undefined, undefined, 22, 22)}"></div>
+      <div style="${corner(undefined, 22, 22, undefined)}"></div>
+
+      <div style="position:relative;padding:70px 64px 6px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:13px;font-weight:700;letter-spacing:5px;color:${hexToRgba(c1, 0.75)};margin-bottom:34px;">
+          ${esc(nombreMarca.toUpperCase())}${instagram ? `<span style="opacity:0.45;"> &nbsp;—&nbsp; </span>${esc(instagram)}` : ""}
+        </div>
+
+        <div style="font-family:'Playfair Display',serif;font-weight:800;font-size:${tituloSize}px;line-height:1.1;color:${c1};letter-spacing:0.5px;padding:0 10px;">
+          ${esc(tituloTexto)}
+        </div>
+
+        <div style="margin:26px 0 24px;">${filete}</div>
+
+        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:600;letter-spacing:3.5px;color:${hexToRgba(c1, 0.8)};">
+          PRESUPUESTO PARA ${esc(datos.clienteNombre.toUpperCase())}
+        </div>
+
+        ${
+          modulo === "design" && iconoInfo.frase
+            ? `<div style="font-family:'Dancing Script',cursive;font-size:26px;font-weight:700;color:${c1};margin:24px 40px 0;line-height:1.3;">${esc(iconoInfo.frase)}</div>`
+            : ""
+        }
+      </div>
+
+      ${
+        datos.alcance
+          ? `
+      <div style="position:relative;padding:36px 64px 0;text-align:left;">
+        <div style="font-size:11.5px;letter-spacing:3px;font-weight:600;color:${hexToRgba(c1, 0.7)};border-left:2px solid ${c3};padding-left:12px;">DETALLE DEL SERVICIO</div>
+        <div style="font-size:16.5px;color:#2a2318;margin-top:14px;line-height:1.65;">${esc(datos.alcance)}</div>
+      </div>`
+          : ""
+      }
+
+      ${
+        datos.precio != null
+          ? `
+      <div style="position:relative;text-align:center;padding:40px 64px 6px;">
+        ${filete}
+        <div style="font-family:'Playfair Display',serif;font-size:12.5px;letter-spacing:4px;font-weight:700;color:${hexToRgba(c1, 0.7)};margin:20px 0 8px;">INVERSIÓN</div>
+        <div style="font-family:'Playfair Display',serif;font-size:46px;font-weight:800;color:${c1};letter-spacing:0.5px;">${esc(formatMoney(datos.precio))}</div>
+        <div style="margin-top:20px;">${filete}</div>
+      </div>`
+          : ""
+      }
+
+      <div style="position:relative;text-align:center;font-style:italic;font-size:14.5px;color:${hexToRgba(c1, 0.65)};padding:22px 56px 50px;">Gracias por la confianza</div>
+
+      <div style="position:relative;background:${hexToRgba(c1, 0.04)};border-top:1px solid ${hexToRgba(c1, 0.18)};padding:24px 40px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:12.5px;letter-spacing:1.2px;color:${c1};font-weight:600;">${contactosSeparados || "Contacto a coordinar"}</div>
+        <div style="font-size:11px;color:${hexToRgba(c1, 0.5)};margin-top:9px;letter-spacing:0.5px;">Presupuesto generado el ${new Date().toLocaleDateString("es-AR")}</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrapper);
+
+  try {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const canvas = await html2canvas(wrapper.firstElementChild, { scale: 2, backgroundColor: null, useCORS: true });
+    return canvas;
+  } finally {
+    wrapper.remove();
+  }
+}
+
+async function generatePresupuestadorPreview(modulo) {
+  try {
+    const datos = collectPresupuestadorFormData(modulo);
+    if (!datos) return;
+    const canvas = await buildPresupuestadorCanvas(modulo, datos);
+    const imgData = canvas.toDataURL("image/jpeg", 0.9);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width, canvas.height] });
+    pdf.addImage(imgData, "JPEG", 0, 0, canvas.width, canvas.height);
+    __presupuestadorPdfDataUri = pdf.output("datauristring");
+    __presupuestadorScopeSeleccion = datos;
+
+    document.getElementById("pp-preview-root").innerHTML = `
+      <div class="field" style="text-align:center;">
+        <img src="${imgData}" style="max-width:100%;border-radius:10px;border:1px solid var(--border);margin-bottom:10px;" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+          <button type="button" class="btn primary small" onclick="savePresupuestador('${modulo}')">Guardar en el historial</button>
+          <button type="button" class="btn small" onclick="downloadDataUri(__presupuestadorPdfDataUri, 'presupuesto.pdf')">Descargar PDF</button>
+          <button type="button" class="btn small" onclick="sharePresupuestadorPreviewWhatsApp()">WhatsApp</button>
+          <button type="button" class="btn small" onclick="sharePresupuestadorPreviewEmail()">Email</button>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    alert("No se pudo generar el presupuesto: " + err.message);
+  }
+}
+
+function sharePresupuestadorPreviewWhatsApp() {
+  if (!__presupuestadorPdfDataUri) return;
+  downloadDataUri(__presupuestadorPdfDataUri, "presupuesto.pdf");
+  const text = encodeURIComponent("Te acabo de descargar el presupuesto en PDF a tu aparato, adjuntalo acá en el chat.");
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
+
+function sharePresupuestadorPreviewEmail() {
+  if (!__presupuestadorPdfDataUri) return;
+  downloadDataUri(__presupuestadorPdfDataUri, "presupuesto.pdf");
+  const subject = encodeURIComponent("Presupuesto");
+  const body = encodeURIComponent("Te comparto el presupuesto. Adjunto el PDF que se acaba de descargar a este aparato.");
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+async function savePresupuestador(modulo) {
+  if (!__presupuestadorScopeSeleccion || !__presupuestadorPdfDataUri) { alert("Primero genere la vista previa."); return; }
+  const datos = __presupuestadorScopeSeleccion;
+  const diasSeguimiento = datos.diasSeguimiento || 0;
+  const ahora = Date.now();
+  try {
+    await db.collection("presupuestosGenerados").add({
+      modulo,
+      clienteId: datos.clienteId,
+      clienteNombre: datos.clienteNombre,
+      scopeNombre: datos.scopeNombre,
+      alcance: datos.alcance || "",
+      precio: datos.precio,
+      rubro: datos.rubro || null,
+      tipoEvento: datos.tipoEvento || null,
+      colores: datos.colores,
+      fuenteKey: datos.fuenteKey,
+      pdfData: __presupuestadorPdfDataUri,
+      estado: "enviado",
+      diasSeguimiento,
+      fechaEnvioMillis: ahora,
+      proximoSeguimientoMillis: diasSeguimiento > 0 ? ahora + diasSeguimiento * 86400000 : null,
+      ownerId: user.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdAtMillis: ahora,
+    });
+    closeModal();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo guardar el presupuesto: " + err.message);
+  }
+}
+
+function presupuestosParaModulo(modulo) {
+  return (state.presupuestosGenerados || []).filter((p) => p.modulo === modulo);
+}
+
+function estadoPresupuestadorLabel(estado) {
+  return { enviado: "Enviado", aprobado_pres: "Aprobado", rechazado_pres: "Rechazado" }[estado] || estado;
+}
+
+function renderPresupuestosTab(modulo) {
+  const elId = modulo === "contenido" ? "tab-presupuestos" : "tab-presupuestosDesign";
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const list = presupuestosParaModulo(modulo);
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>Cliente</th><th>Detalle</th><th>Precio</th><th>Estado</th><th>Seguimiento</th><th></th></tr></thead>
+      <tbody id="presupuestos-tbody-${modulo}"></tbody>
+    </table>
+  `;
+  const tbody = document.getElementById(`presupuestos-tbody-${modulo}`);
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Todavía no generó ningún presupuesto acá.</td></tr>`;
+    return;
+  }
+  const hoy = Date.now();
+  tbody.innerHTML = list
+    .map((p) => {
+      const vencido = p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy;
+      return `
+    <tr>
+      <td><strong>${esc(p.clienteNombre)}</strong></td>
+      <td>${esc(p.scopeNombre || "")}${p.tipoEvento ? `<div class="muted">${esc(TIPOS_EVENTO[p.tipoEvento] || p.tipoEvento)}</div>` : ""}</td>
+      <td>${p.precio != null ? formatMoney(p.precio) : '<span class="muted">-</span>'}</td>
+      <td><span class="badge ${p.estado}">${estadoPresupuestadorLabel(p.estado)}</span></td>
+      <td>${
+        p.estado !== "enviado"
+          ? '<span class="muted">-</span>'
+          : p.proximoSeguimientoMillis
+          ? `<span style="${vencido ? "color:var(--critical);font-weight:600;" : ""}">${new Date(p.proximoSeguimientoMillis).toLocaleDateString("es-AR")}</span>`
+          : '<span class="muted">Sin recordatorio</span>'
+      }</td>
+      <td>
+        <button class="btn small" onclick="downloadDataUriById('${p.id}')">Descargar</button>
+        ${
+          p.estado === "enviado"
+            ? `
+          <button class="btn small" onclick="marcarPresupuestadorEstado('${p.id}','aprobado_pres')">Aprobado</button>
+          <button class="btn small" onclick="marcarPresupuestadorEstado('${p.id}','rechazado_pres')">Rechazado</button>
+          <button class="btn small" onclick="reprogramarSeguimiento('${p.id}')">Reprogramar</button>
+        `
+            : ""
+        }
+        <button class="btn small danger" onclick="deletePresupuestador('${p.id}')">Borrar</button>
+      </td>
+    </tr>`;
+    })
+    .join("");
+}
+
+function downloadDataUriById(id) {
+  const p = (state.presupuestosGenerados || []).find((x) => x.id === id);
+  if (!p) return;
+  downloadDataUri(p.pdfData, `presupuesto-${p.clienteNombre}.pdf`.replace(/\s+/g, "_"));
+}
+
+async function marcarPresupuestadorEstado(id, estado) {
+  try {
+    await db.collection("presupuestosGenerados").doc(id).update({ estado, proximoSeguimientoMillis: null });
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo actualizar: " + err.message);
+  }
+}
+
+async function reprogramarSeguimiento(id) {
+  const dias = prompt("¿En cuántos días quiere que se lo recuerde de nuevo?", "5");
+  if (dias === null) return;
+  const n = parseInt(dias, 10);
+  if (!n || n <= 0) { alert("Ingrese un número de días mayor a 0."); return; }
+  try {
+    await db.collection("presupuestosGenerados").doc(id).update({
+      diasSeguimiento: n,
+      proximoSeguimientoMillis: Date.now() + n * 86400000,
+    });
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo reprogramar: " + err.message);
+  }
+}
+
+async function deletePresupuestador(id) {
+  if (!confirm("¿Borrar este presupuesto del historial?")) return;
+  try {
+    await db.collection("presupuestosGenerados").doc(id).delete();
+    await loadAll();
+  } catch (err) {
+    alert("No se pudo borrar: " + err.message);
+  }
+}
+
+function seguimientosPendientesCount(modulo) {
+  const hoy = Date.now();
+  return presupuestosParaModulo(modulo).filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy).length;
+}
+
+function renderSeguimientosAlert(modulo) {
+  const elId = modulo === "contenido" ? "seguimientos-alert-contenido" : "seguimientos-alert-design";
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const hoy = Date.now();
+  const pendientes = presupuestosParaModulo(modulo).filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy);
+  if (pendientes.length === 0) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div class="seguimiento-alert">
+      <strong>Seguimientos pendientes (${pendientes.length}):</strong> ${pendientes.map((p) => esc(p.clienteNombre)).join(", ")} — revíselos en la pestaña "Presupuestos".
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------
+// Modal / export / utils
+// ------------------------------------------------------------
+function openModal(html) {
+  document.getElementById("modal-root").innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this) closeModal()"><div class="modal frame-ticks">${html}</div></div>`;
+}
+function openModalWide(html) {
+  document.getElementById("modal-root").innerHTML = `<div class="modal-backdrop" onclick="if(event.target===this) closeModal()"><div class="modal wide frame-ticks">${html}</div></div>`;
+}
+function closeModal() { document.getElementById("modal-root").innerHTML = ""; }
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "clientes-proyectos-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+}
+
+function esc(str) {
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+function escAttr(str) { return esc(str); }
+function formatDate(d) {
+  const date = new Date(d + "T00:00:00");
+  return date.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+function formatMoney(n) {
+  return "$" + Number(n).toLocaleString("es-AR");
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
