@@ -382,6 +382,24 @@ const OPCIONES_SEGUIMIENTO = [
   { dias: 15, label: "En 15 días" },
 ];
 
+const OPCIONES_VALIDEZ = [
+  { dias: 0, label: "Sin fecha de validez" },
+  { dias: 3, label: "3 días" },
+  { dias: 5, label: "5 días" },
+  { dias: 7, label: "7 días" },
+  { dias: 10, label: "10 días" },
+  { dias: 15, label: "15 días" },
+  { dias: 30, label: "30 días" },
+];
+
+const OPCIONES_AVISO_VENCIMIENTO = [
+  { dias: 0, label: "No avisarme" },
+  { dias: 1, label: "1 día antes de vencer" },
+  { dias: 2, label: "2 días antes de vencer" },
+  { dias: 3, label: "3 días antes de vencer" },
+  { dias: 5, label: "5 días antes de vencer" },
+];
+
 let __presupuestadorContexto = null; // { modulo, proyectoId }
 let __presupuestadorScopeSeleccion = null; // datos recolectados del formulario
 let __presupuestadorPdfDataUri = null;
@@ -2228,8 +2246,17 @@ async function openPresupuestadorModal(modulo, proyectoId) {
     <div class="field"><label>Tipografía</label>
       <select id="pp-fuente">${Object.entries(FUENTES_PRESUPUESTO).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join("")}</select>
     </div>
-    <div class="field"><label>Recordarme hacer seguimiento</label>
-      <select id="pp-seguimiento">${OPCIONES_SEGUIMIENTO.map((o) => `<option value="${o.dias}" ${o.dias === 5 ? "selected" : ""}>${o.label}</option>`).join("")}</select>
+    <div class="field-row">
+      <div class="field"><label>Validez del presupuesto</label>
+        <select id="pp-validez">${OPCIONES_VALIDEZ.map((o) => `<option value="${o.dias}" ${o.dias === 7 ? "selected" : ""}>${o.label}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Recordarme hacer seguimiento</label>
+        <select id="pp-seguimiento">${OPCIONES_SEGUIMIENTO.map((o) => `<option value="${o.dias}" ${o.dias === 5 ? "selected" : ""}>${o.label}</option>`).join("")}</select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Avisarme antes de que venza (si sigue sin aprobar)</label>
+      <select id="pp-aviso-vencimiento">${OPCIONES_AVISO_VENCIMIENTO.map((o) => `<option value="${o.dias}" ${o.dias === 2 ? "selected" : ""}>${o.label}</option>`).join("")}</select>
     </div>
 
     <div id="pp-preview-root"></div>
@@ -2366,8 +2393,10 @@ function collectPresupuestadorFormData(modulo) {
   const color3 = document.getElementById("pp-color3").value;
   const fuenteKey = document.getElementById("pp-fuente").value;
   const diasSeguimiento = parseInt(document.getElementById("pp-seguimiento").value, 10) || 0;
+  const diasValidez = parseInt(document.getElementById("pp-validez").value, 10) || 0;
+  const diasAvisoVencimiento = parseInt(document.getElementById("pp-aviso-vencimiento").value, 10) || 0;
 
-  const base = { modulo, clienteId, clienteNombre: clienteNombreVal, colores: [color1, color2, color3], fuenteKey, diasSeguimiento };
+  const base = { modulo, clienteId, clienteNombre: clienteNombreVal, colores: [color1, color2, color3], fuenteKey, diasSeguimiento, diasValidez, diasAvisoVencimiento };
 
   if (modulo === "contenido") {
     const alcance = document.getElementById("pp-alcance").value.trim();
@@ -2437,6 +2466,11 @@ async function buildPresupuestadorCanvas(modulo, datos) {
   if (brand.whatsapp) contactos.push(`<span>WHATSAPP &nbsp;${esc(brand.whatsapp)}</span>`);
   if (instagram) contactos.push(`<span>INSTAGRAM &nbsp;${esc(instagram)}</span>`);
   if (brand.email) contactos.push(`<span>EMAIL &nbsp;${esc(brand.email)}</span>`);
+
+  const diasValidez = datos.diasValidez || 0;
+  const fechaValidezTexto = diasValidez > 0
+    ? new Date(Date.now() + diasValidez * 86400000).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : null;
 
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
@@ -2509,6 +2543,12 @@ async function buildPresupuestadorCanvas(modulo, datos) {
           : ""
       }
 
+      ${
+        fechaValidezTexto
+          ? `<div style="position:relative;text-align:center;font-size:12px;letter-spacing:0.8px;color:${hexToRgba(c1, 0.6)};padding-top:8px;">Presupuesto válido hasta el ${fechaValidezTexto}</div>`
+          : ""
+      }
+
       <div style="position:relative;text-align:center;font-style:italic;font-size:14.5px;color:${hexToRgba(c1, 0.65)};padding:22px 56px 50px;">Gracias por la confianza</div>
 
       <div style="position:relative;background:${hexToRgba(c1, 0.04)};border-top:1px solid ${hexToRgba(c1, 0.18)};padding:24px 40px;text-align:center;">
@@ -2575,7 +2615,11 @@ async function savePresupuestador(modulo) {
   if (!__presupuestadorScopeSeleccion || !__presupuestadorPdfDataUri) { alert("Primero genere la vista previa."); return; }
   const datos = __presupuestadorScopeSeleccion;
   const diasSeguimiento = datos.diasSeguimiento || 0;
+  const diasValidez = datos.diasValidez || 0;
+  const diasAvisoVencimiento = datos.diasAvisoVencimiento || 0;
   const ahora = Date.now();
+  const validoHastaMillis = diasValidez > 0 ? ahora + diasValidez * 86400000 : null;
+  const avisoVencimientoMillis = validoHastaMillis && diasAvisoVencimiento > 0 ? validoHastaMillis - diasAvisoVencimiento * 86400000 : null;
   try {
     await db.collection("presupuestosGenerados").add({
       modulo,
@@ -2591,6 +2635,10 @@ async function savePresupuestador(modulo) {
       pdfData: __presupuestadorPdfDataUri,
       estado: "enviado",
       diasSeguimiento,
+      diasValidez,
+      validoHastaMillis,
+      diasAvisoVencimiento,
+      avisoVencimientoMillis,
       fechaEnvioMillis: ahora,
       proximoSeguimientoMillis: diasSeguimiento > 0 ? ahora + diasSeguimiento * 86400000 : null,
       ownerId: user.uid,
@@ -2619,25 +2667,32 @@ function renderPresupuestosTab(modulo) {
   const list = presupuestosParaModulo(modulo);
   el.innerHTML = `
     <table>
-      <thead><tr><th>Cliente</th><th>Detalle</th><th>Precio</th><th>Estado</th><th>Seguimiento</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>Detalle</th><th>Precio</th><th>Estado</th><th>Válido hasta</th><th>Seguimiento</th><th></th></tr></thead>
       <tbody id="presupuestos-tbody-${modulo}"></tbody>
     </table>
   `;
   const tbody = document.getElementById(`presupuestos-tbody-${modulo}`);
   if (list.length === 0) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">Todavía no generó ningún presupuesto acá.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Todavía no generó ningún presupuesto acá.</td></tr>`;
     return;
   }
   const hoy = Date.now();
   tbody.innerHTML = list
     .map((p) => {
       const vencido = p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy;
+      const validezVencida = p.estado === "enviado" && p.validoHastaMillis && p.validoHastaMillis <= hoy;
+      const avisoVencimiento = p.estado === "enviado" && p.avisoVencimientoMillis && p.avisoVencimientoMillis <= hoy && !validezVencida;
       return `
     <tr>
       <td><strong>${esc(p.clienteNombre)}</strong></td>
       <td>${esc(p.scopeNombre || "")}${p.tipoEvento ? `<div class="muted">${esc(TIPOS_EVENTO[p.tipoEvento] || p.tipoEvento)}</div>` : ""}</td>
       <td>${p.precio != null ? formatMoney(p.precio) : '<span class="muted">-</span>'}</td>
       <td><span class="badge ${p.estado}">${estadoPresupuestadorLabel(p.estado)}</span></td>
+      <td>${
+        p.validoHastaMillis
+          ? `<span style="${validezVencida ? "color:var(--critical);font-weight:600;" : avisoVencimiento ? "color:var(--warn);font-weight:600;" : ""}">${new Date(p.validoHastaMillis).toLocaleDateString("es-AR")}</span>`
+          : '<span class="muted">Sin límite</span>'
+      }</td>
       <td>${
         p.estado !== "enviado"
           ? '<span class="muted">-</span>'
@@ -2706,7 +2761,10 @@ async function deletePresupuestador(id) {
 
 function seguimientosPendientesCount(modulo) {
   const hoy = Date.now();
-  return presupuestosParaModulo(modulo).filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy).length;
+  const lista = presupuestosParaModulo(modulo);
+  const porSeguimiento = lista.filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy);
+  const porVencer = lista.filter((p) => p.estado === "enviado" && p.avisoVencimientoMillis && p.avisoVencimientoMillis <= hoy && (!p.proximoSeguimientoMillis || p.proximoSeguimientoMillis > hoy));
+  return porSeguimiento.length + porVencer.length;
 }
 
 function renderSeguimientosAlert(modulo) {
@@ -2714,11 +2772,23 @@ function renderSeguimientosAlert(modulo) {
   const el = document.getElementById(elId);
   if (!el) return;
   const hoy = Date.now();
-  const pendientes = presupuestosParaModulo(modulo).filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy);
-  if (pendientes.length === 0) { el.innerHTML = ""; return; }
+  const lista = presupuestosParaModulo(modulo);
+  const pendientes = lista.filter((p) => p.estado === "enviado" && p.proximoSeguimientoMillis && p.proximoSeguimientoMillis <= hoy);
+  const porVencer = lista.filter((p) => p.estado === "enviado" && p.avisoVencimientoMillis && p.avisoVencimientoMillis <= hoy);
+  if (pendientes.length === 0 && porVencer.length === 0) { el.innerHTML = ""; return; }
+  const lineas = [];
+  if (pendientes.length > 0) {
+    lineas.push(`<div><strong>Seguimientos pendientes (${pendientes.length}):</strong> ${pendientes.map((p) => esc(p.clienteNombre)).join(", ")}.</div>`);
+  }
+  if (porVencer.length > 0) {
+    lineas.push(`<div><strong>Presupuestos por vencer sin aprobar (${porVencer.length}):</strong> ${porVencer
+      .map((p) => `${esc(p.clienteNombre)} (vence ${new Date(p.validoHastaMillis).toLocaleDateString("es-AR")})`)
+      .join(", ")} — escríbales antes de que se venza la validez.</div>`);
+  }
   el.innerHTML = `
     <div class="seguimiento-alert">
-      <strong>Seguimientos pendientes (${pendientes.length}):</strong> ${pendientes.map((p) => esc(p.clienteNombre)).join(", ")} — revíselos en la pestaña "Presupuestos".
+      ${lineas.join("")}
+      <div class="muted" style="margin-top:4px;">Revíselos en la pestaña "Presupuestos".</div>
     </div>
   `;
 }
