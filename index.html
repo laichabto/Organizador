@@ -1309,10 +1309,11 @@ async function deletePack(id) {
 }
 
 // ------------------------------------------------------------
-// Etiquetas: categorías de desglose configurables por el usuario
-// (Ej: Color, Largo, Escote en Design; Formato, Plataforma en
-// Contenido). Cada categoría tiene una lista fija de valores que
-// se elige una vez acá, y después se asignan por proyecto.
+// Etiquetas: características de desglose configurables por el
+// usuario, en 3 niveles (Ej en Design: "Tipo de vestido" →
+// sub-tipo "Corto"/"Largo"/"Sirena" → variante final propia de
+// cada sub-tipo, como "Mini"/"Midi" para "Corto"). Se cargan una
+// sola vez acá y después se asignan por proyecto.
 // ------------------------------------------------------------
 function categoriasEtiquetas(modulo) {
   return (state.etiquetasCategorias || []).filter((c) => c.modulo === modulo);
@@ -1325,19 +1326,25 @@ function renderEtiquetas(modulo) {
   const categorias = categoriasEtiquetas(modulo);
   el.innerHTML = `
     <div class="toolbar">
-      <span class="muted" style="font-size:13px;">Cree categorías propias (Color, Largo, Escote, Formato, etc.) para poder desglosar después el portafolio y los proyectos.</span>
-      <button class="btn primary" onclick="openEtiquetaCategoriaModal('${modulo}')">+ Nueva categoría</button>
+      <span class="muted" style="font-size:13px;">Cree características propias (Ej: "Tipo de vestido"), con sus sub-tipos (Ej: Corto, Largo, Sirena) y las variantes finales de cada uno (Ej: para "Corto" → Mini, Midi).</span>
+      <button class="btn primary" onclick="openEtiquetaCategoriaModal('${modulo}')">+ Nueva característica</button>
     </div>
     ${
       categorias.length === 0
-        ? `<p class="muted" style="padding:20px 0;">Todavía no cargó ninguna categoría de etiquetas.</p>`
+        ? `<p class="muted" style="padding:20px 0;">Todavía no cargó ninguna característica.</p>`
         : `<div style="display:flex;flex-direction:column;gap:10px;">
             ${categorias
               .map(
                 (c) => `
               <div class="pack-card frame-ticks" style="cursor:default;">
                 <h4>${esc(c.nombre)}</h4>
-                <p>${(c.valores || []).length ? esc((c.valores || []).join(", ")) : "Sin valores todavía"}</p>
+                <p>${
+                  (c.subtipos || []).length
+                    ? (c.subtipos || [])
+                        .map((st) => `${esc(st.nombre)}${st.variantes && st.variantes.length ? ` (${esc(st.variantes.join(", "))})` : ""}`)
+                        .join(" · ")
+                    : "Sin sub-tipos todavía"
+                }</p>
                 <div class="row-end" style="margin-top:8px;">
                   <button class="btn small" onclick="openEtiquetaCategoriaModal('${modulo}','${c.id}')">Editar</button>
                   <button class="btn small danger" onclick="deleteEtiquetaCategoria('${c.id}')">Borrar</button>
@@ -1350,18 +1357,39 @@ function renderEtiquetas(modulo) {
   `;
 }
 
+function etqSubtipoRowHtml(subtipo) {
+  const nombre = subtipo ? subtipo.nombre : "";
+  const variantes = subtipo && subtipo.variantes ? subtipo.variantes.join("\n") : "";
+  return `
+    <div class="etq-subtipo-row" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field"><label>Sub-tipo</label><input class="etq-subtipo-nombre" value="${escAttr(nombre)}" placeholder="Ej: Corto" /></div>
+        <div class="field" style="max-width:44px;flex:none;"><label>&nbsp;</label><button type="button" class="btn small danger" onclick="this.closest('.etq-subtipo-row').remove()">✕</button></div>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Variantes finales de este sub-tipo (una por línea)</label>
+        <textarea class="etq-subtipo-variantes" rows="3" placeholder="Ej:${String.fromCharCode(10)}Mini${String.fromCharCode(10)}Midi">${esc(variantes)}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+function addEtqSubtipoRow() {
+  document.getElementById("etq-subtipos-root").insertAdjacentHTML("beforeend", etqSubtipoRowHtml(null));
+}
+
 function openEtiquetaCategoriaModal(modulo, id) {
   const c = id ? (state.etiquetasCategorias || []).find((x) => x.id === id) : null;
+  const subtiposIniciales = c && c.subtipos && c.subtipos.length ? c.subtipos : [null];
   openModal(`
-    <h2>${c ? "Editar categoría" : "Nueva categoría de etiquetas"} — ${modulo === "contenido" ? "Contenido" : "Laila Design"}</h2>
-    <div class="field"><label>Nombre de la categoría *</label><input id="f-etq-nombre" value="${c ? escAttr(c.nombre) : ""}" placeholder="Ej: Color, Largo, Escote" /></div>
-    <div class="field">
-      <label>Valores posibles (uno por línea)</label>
-      <textarea id="f-etq-valores" rows="6" placeholder="Ej:${String.fromCharCode(10)}Rojo${String.fromCharCode(10)}Azul${String.fromCharCode(10)}Dorado">${c && c.valores ? esc(c.valores.join("\n")) : ""}</textarea>
-    </div>
+    <h2>${c ? "Editar característica" : "Nueva característica"} — ${modulo === "contenido" ? "Contenido" : "Laila Design"}</h2>
+    <div class="field"><label>Nombre de la característica *</label><input id="f-etq-nombre" value="${c ? escAttr(c.nombre) : ""}" placeholder="Ej: Tipo de vestido" /></div>
+    <label>Sub-tipos, cada uno con sus propias variantes finales</label>
+    <div id="etq-subtipos-root">${subtiposIniciales.map((st) => etqSubtipoRowHtml(st)).join("")}</div>
+    <button type="button" class="btn small" onclick="addEtqSubtipoRow()" style="margin-bottom:14px;">+ Agregar sub-tipo</button>
     <div class="row-end">
       <button class="btn" onclick="closeModal()">Cancelar</button>
-      ${c ? `<button class="btn danger" onclick="deleteEtiquetaCategoria('${c.id}')">Borrar categoría</button>` : ""}
+      ${c ? `<button class="btn danger" onclick="deleteEtiquetaCategoria('${c.id}')">Borrar característica</button>` : ""}
       <button class="btn primary" onclick="saveEtiquetaCategoria('${modulo}','${id || ""}')">Guardar</button>
     </div>
   `);
@@ -1369,19 +1397,26 @@ function openEtiquetaCategoriaModal(modulo, id) {
 
 async function saveEtiquetaCategoria(modulo, id) {
   const nombre = document.getElementById("f-etq-nombre").value.trim();
-  if (!nombre) { alert("Ingrese el nombre de la categoría."); return; }
-  const valores = document.getElementById("f-etq-valores").value
-    .split("\n")
-    .map((v) => v.trim())
+  if (!nombre) { alert("Ingrese el nombre de la característica."); return; }
+  const subtipos = Array.from(document.querySelectorAll("#etq-subtipos-root .etq-subtipo-row"))
+    .map((row) => {
+      const nombreSt = row.querySelector(".etq-subtipo-nombre").value.trim();
+      if (!nombreSt) return null;
+      const variantes = row.querySelector(".etq-subtipo-variantes").value
+        .split("\n")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      return { nombre: nombreSt, variantes };
+    })
     .filter(Boolean);
   try {
     if (id) {
-      await db.collection("etiquetasCategorias").doc(id).update({ nombre, valores });
+      await db.collection("etiquetasCategorias").doc(id).update({ nombre, subtipos });
     } else {
       await db.collection("etiquetasCategorias").add({
         modulo,
         nombre,
-        valores,
+        subtipos,
         ownerId: user.uid,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         createdAtMillis: Date.now(),
@@ -1390,56 +1425,90 @@ async function saveEtiquetaCategoria(modulo, id) {
     closeModal();
     await loadAll();
   } catch (err) {
-    alert("No se pudo guardar la categoría: " + err.message);
+    alert("No se pudo guardar la característica: " + err.message);
   }
 }
 
 async function deleteEtiquetaCategoria(id) {
-  if (!confirm("¿Borrar esta categoría de etiquetas? Los proyectos que ya tengan un valor asignado lo van a perder.")) return;
+  if (!confirm("¿Borrar esta característica? Los proyectos que ya tengan un valor asignado lo van a perder.")) return;
   try {
     await db.collection("etiquetasCategorias").doc(id).delete();
     closeModal();
     await loadAll();
   } catch (err) {
-    alert("No se pudo borrar la categoría: " + err.message);
+    alert("No se pudo borrar la característica: " + err.message);
   }
 }
 
-// Genera los <select> dinámicos de etiquetas para inyectar en el
-// formulario de un proyecto (Contenido o Design).
+// Arma las opciones del <select> de variante final, según el
+// sub-tipo elegido dentro de una característica.
+function etqVarianteOptionsHtml(categoria, subtipoNombre, varianteActual) {
+  const st = (categoria.subtipos || []).find((s) => s.nombre === subtipoNombre);
+  const variantes = st ? st.variantes || [] : [];
+  return (
+    `<option value="">-- Sin definir --</option>` +
+    variantes.map((v) => `<option value="${escAttr(v)}" ${varianteActual === v ? "selected" : ""}>${esc(v)}</option>`).join("")
+  );
+}
+
+// Cuando cambia el sub-tipo elegido en el formulario de un proyecto,
+// recarga las opciones del select de variante final correspondiente.
+function onEtiquetaSubtipoChange(selectEl) {
+  const block = selectEl.closest(".etiqueta-cat-block");
+  const catId = block.dataset.catId;
+  const categoria = (state.etiquetasCategorias || []).find((c) => c.id === catId);
+  const varianteSelect = block.querySelector(".etiqueta-variante-select");
+  varianteSelect.innerHTML = categoria ? etqVarianteOptionsHtml(categoria, selectEl.value, null) : `<option value="">-- Sin definir --</option>`;
+}
+
+// Genera los <select> dinámicos (sub-tipo → variante) para inyectar
+// en el formulario de un proyecto (Contenido o Design).
 function etiquetasFormHtml(modulo, proyecto) {
   const categorias = categoriasEtiquetas(modulo);
   if (categorias.length === 0) {
-    return `<div class="field"><label>Etiquetas</label><p class="muted" style="margin:0;">Todavía no cargó categorías de etiquetas para este módulo. Puede crearlas en la pestaña "Etiquetas".</p></div>`;
+    return `<div class="field"><label>Etiquetas</label><p class="muted" style="margin:0;">Todavía no cargó características para este módulo. Puede crearlas en la pestaña "Etiquetas".</p></div>`;
   }
   const actuales = (proyecto && proyecto.etiquetas) || {};
   return `
     <div class="field">
       <label>Etiquetas</label>
-      <div class="field-row" style="flex-wrap:wrap;">
+      <div style="display:flex;flex-direction:column;gap:10px;">
         ${categorias
-          .map(
-            (c) => `
-          <div class="field" style="min-width:150px;">
-            <label style="text-transform:none;font-size:11.5px;">${esc(c.nombre)}</label>
-            <select class="etiqueta-select" data-cat-id="${c.id}">
-              <option value="">-- Sin definir --</option>
-              ${(c.valores || []).map((v) => `<option value="${escAttr(v)}" ${actuales[c.id] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}
-            </select>
-          </div>`
-          )
+          .map((c) => {
+            const actual = actuales[c.id] || {};
+            const subtipoOptions =
+              `<option value="">-- Sin definir --</option>` +
+              (c.subtipos || []).map((st) => `<option value="${escAttr(st.nombre)}" ${actual.subtipo === st.nombre ? "selected" : ""}>${esc(st.nombre)}</option>`).join("");
+            const varianteOptions = etqVarianteOptionsHtml(c, actual.subtipo, actual.variante);
+            return `
+          <div class="etiqueta-cat-block" data-cat-id="${c.id}" style="border-left:2px solid var(--border);padding-left:12px;">
+            <label style="text-transform:none;font-size:12.5px;font-weight:600;color:var(--text);">${esc(c.nombre)}</label>
+            <div class="field-row">
+              <div class="field"><label>Sub-tipo</label>
+                <select class="etiqueta-subtipo-select" onchange="onEtiquetaSubtipoChange(this)">${subtipoOptions}</select>
+              </div>
+              <div class="field"><label>Variante</label>
+                <select class="etiqueta-variante-select">${varianteOptions}</select>
+              </div>
+            </div>
+          </div>`;
+          })
           .join("")}
       </div>
     </div>
   `;
 }
 
-// Lee los <select class="etiqueta-select"> presentes en el modal abierto
-// y arma el objeto { categoriaId: valorElegido } a guardar en el proyecto.
+// Lee los bloques .etiqueta-cat-block presentes en el modal abierto
+// y arma el objeto { categoriaId: { subtipo, variante } } a guardar
+// en el proyecto.
 function collectEtiquetasFromModal() {
   const etiquetas = {};
-  document.querySelectorAll(".etiqueta-select").forEach((sel) => {
-    if (sel.value) etiquetas[sel.dataset.catId] = sel.value;
+  document.querySelectorAll(".etiqueta-cat-block").forEach((block) => {
+    const catId = block.dataset.catId;
+    const subtipo = block.querySelector(".etiqueta-subtipo-select").value;
+    const variante = block.querySelector(".etiqueta-variante-select").value;
+    if (subtipo || variante) etiquetas[catId] = { subtipo: subtipo || null, variante: variante || null };
   });
   return etiquetas;
 }
