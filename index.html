@@ -2401,7 +2401,7 @@ function collectPresupuestadorFormData(modulo) {
   if (modulo === "contenido") {
     const alcance = document.getElementById("pp-alcance").value.trim();
     const rubro = document.getElementById("pp-rubro").value;
-    let scopeNombre, precio;
+    let scopeNombre, precio, itemsTexto = "";
     if (__presupuestadorPackSeleccionado === "personalizado") {
       scopeNombre = document.getElementById("pp-personalizado-nombre").value.trim() || "Pack personalizado";
       const precioVal = document.getElementById("pp-personalizado-precio").value;
@@ -2410,11 +2410,12 @@ function collectPresupuestadorFormData(modulo) {
       const pack = state.packs.find((p) => p.id === __presupuestadorPackSeleccionado);
       scopeNombre = pack ? pack.nombre : "Pack";
       precio = pack ? pack.precio : null;
+      itemsTexto = pack ? packItemsText(pack.items) : "";
     } else {
       alert("Elija un pack, o toque 'Personalizado' para armar uno a medida.");
       return null;
     }
-    return { ...base, scopeNombre, precio, alcance, rubro };
+    return { ...base, scopeNombre, precio, alcance, rubro, itemsTexto };
   } else {
     const tipoEvento = document.getElementById("pp-tipoevento").value;
     const alcance = document.getElementById("pp-alcance").value.trim();
@@ -2510,7 +2511,7 @@ async function buildPresupuestadorCanvas(modulo, datos) {
 
         <div style="margin:26px 0 24px;">${filete}</div>
 
-        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:600;letter-spacing:3.5px;color:${hexToRgba(c1, 0.8)};">
+        <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;letter-spacing:2px;color:${hexToRgba(c1, 0.85)};">
           PRESUPUESTO PARA ${esc(datos.clienteNombre.toUpperCase())}
         </div>
 
@@ -2522,11 +2523,20 @@ async function buildPresupuestadorCanvas(modulo, datos) {
       </div>
 
       ${
-        datos.alcance
+        datos.itemsTexto || datos.alcance
           ? `
       <div style="position:relative;padding:36px 64px 0;text-align:left;">
         <div style="font-size:11.5px;letter-spacing:3px;font-weight:600;color:${hexToRgba(c1, 0.7)};border-left:2px solid ${c3};padding-left:12px;">DETALLE DEL SERVICIO</div>
-        <div style="font-size:16.5px;color:#2a2318;margin-top:14px;line-height:1.65;">${esc(datos.alcance)}</div>
+        ${
+          datos.itemsTexto
+            ? `<div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:${c1};margin-top:16px;">${esc(datos.itemsTexto)}</div>`
+            : ""
+        }
+        ${
+          datos.alcance
+            ? `<div style="font-size:15.5px;color:#2a2318;margin-top:${datos.itemsTexto ? "10px" : "14px"};line-height:1.65;">${esc(datos.alcance)}</div>`
+            : ""
+        }
       </div>`
           : ""
       }
@@ -2536,8 +2546,8 @@ async function buildPresupuestadorCanvas(modulo, datos) {
           ? `
       <div style="position:relative;text-align:center;padding:40px 64px 6px;">
         ${filete}
-        <div style="font-family:'Playfair Display',serif;font-size:12.5px;letter-spacing:4px;font-weight:700;color:${hexToRgba(c1, 0.7)};margin:20px 0 8px;">INVERSIÓN</div>
-        <div style="font-family:'Playfair Display',serif;font-size:46px;font-weight:800;color:${c1};letter-spacing:0.5px;">${esc(formatMoney(datos.precio))}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:12.5px;letter-spacing:4px;font-weight:700;color:${hexToRgba(c1, 0.7)};margin:20px 0 8px;">PRESUPUESTO</div>
+        <div style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:700;color:${c3};letter-spacing:0.3px;">${esc(formatMoney(datos.precio))}</div>
         <div style="margin-top:20px;">${filete}</div>
       </div>`
           : ""
