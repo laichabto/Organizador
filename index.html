@@ -2638,7 +2638,8 @@ function collectPresupuestadorFormData(modulo) {
       alert("Elija un pack, o toque 'Personalizado' para armar uno a medida.");
       return null;
     }
-    return { ...base, scopeNombre, precio, alcance, rubro, itemsTexto };
+    const packId = __presupuestadorPackSeleccionado && __presupuestadorPackSeleccionado !== "personalizado" ? __presupuestadorPackSeleccionado : null;
+    return { ...base, scopeNombre, precio, alcance, rubro, itemsTexto, packId };
   } else {
     const tipoEvento = document.getElementById("pp-tipoevento").value;
     const alcance = document.getElementById("pp-alcance").value.trim();
@@ -2868,6 +2869,8 @@ async function savePresupuestador(modulo) {
       fuenteKey: datos.fuenteKey,
       pdfData: __presupuestadorPdfDataUri,
       estado: "enviado",
+      packId: datos.packId || null,
+      proyectoId: (__presupuestadorContexto && __presupuestadorContexto.proyectoId) || null,
       diasSeguimiento,
       diasValidez,
       validoHastaMillis,
@@ -2945,6 +2948,11 @@ function renderPresupuestosTab(modulo) {
         `
             : ""
         }
+        ${
+          p.proyectoId
+            ? `<button class="btn small" onclick="${modulo === "design" ? `openProyectoDesignModal('${p.proyectoId}')` : `openProyectoModal('${p.proyectoId}')`}">Ver proyecto</button>`
+            : ""
+        }
         <button class="btn small danger" onclick="deletePresupuestador('${p.id}')">Borrar</button>
       </td>
     </tr>`;
@@ -2961,9 +2969,91 @@ function downloadDataUriById(id) {
 async function marcarPresupuestadorEstado(id, estado) {
   try {
     await db.collection("presupuestosGenerados").doc(id).update({ estado, proximoSeguimientoMillis: null });
+    if (estado === "aprobado_pres") {
+      await onPresupuestoAprobado(id);
+    }
     await loadAll();
   } catch (err) {
     alert("No se pudo actualizar: " + err.message);
+  }
+}
+
+// Al aprobar un presupuesto: si venía de un proyecto ya existente, lo
+// marca como confirmado/activo; si era un presupuesto suelto (sin
+// proyecto), crea el proyecto solo con los datos del presupuesto.
+async function onPresupuestoAprobado(presId) {
+  const p = (state.presupuestosGenerados || []).find((x) => x.id === presId);
+  if (!p) return;
+  try {
+    if (p.proyectoId) {
+      if (p.modulo === "design") {
+        const proy = state.proyectosDesign.find((x) => x.id === p.proyectoId);
+        const update = { presupuestoAprobadoId: presId };
+        if (proy && proy.estado === "consulta") update.estado = "disenio";
+        await db.collection("proyectosDesign").doc(p.proyectoId).update(update);
+      } else {
+        await db.collection("proyectosSimple").doc(p.proyectoId).update({ presupuestoAprobadoId: presId });
+      }
+      return;
+    }
+
+    let clienteId = p.clienteId;
+    if (p.modulo === "design") {
+      if (!clienteId) {
+        const refCliente = await db.collection("clientesDesign").add({
+          nombre: p.clienteNombre,
+          ownerId: user.uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        clienteId = refCliente.id;
+      }
+      const proyRef = await db.collection("proyectosDesign").add({
+        clienteId,
+        diseno: p.scopeNombre || "Trabajo confirmado por presupuesto",
+        costoTela: null,
+        costoManoObra: null,
+        costoInsumos: null,
+        precio: p.precio != null ? p.precio : null,
+        tipoEvento: p.tipoEvento || null,
+        tipoEventoOtro: "",
+        colores: "",
+        estado: "disenio",
+        plazoEntrega: null,
+        etiquetas: {},
+        notas: p.alcance || "",
+        presupuestoAprobadoId: presId,
+        ownerId: user.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      await db.collection("presupuestosGenerados").doc(presId).update({ proyectoId: proyRef.id });
+    } else {
+      if (!clienteId) {
+        const refCliente = await db.collection("clientes").add({
+          nombre: p.clienteNombre,
+          ownerId: user.uid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        clienteId = refCliente.id;
+      }
+      const proyRef = await db.collection("proyectosSimple").add({
+        clienteId,
+        descripcion: p.scopeNombre || "Trabajo confirmado por presupuesto",
+        packId: p.packId || null,
+        packNombre: p.scopeNombre || null,
+        estado: "sin_empezar",
+        fechaLimite: null,
+        presupuesto: p.precio != null ? p.precio : null,
+        etiquetas: {},
+        notas: p.alcance || "",
+        presupuestoAprobadoId: presId,
+        ownerId: user.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      await generatePiezasChecklistAsync(proyRef.id, clienteId, p.scopeNombre || "Trabajo", p.packId || null, 1, false);
+      await db.collection("presupuestosGenerados").doc(presId).update({ proyectoId: proyRef.id });
+    }
+  } catch (err) {
+    alert("El presupuesto se marcó como aprobado, pero hubo un problema creando/actualizando el proyecto: " + err.message);
   }
 }
 
